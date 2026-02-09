@@ -1,0 +1,8 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+backend/.venv
+backend/oauth/token.json
+frontend/node_modules
+frontend/dist

@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ai-resume-matching-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: APP_NAME
+        value: AI Resume Screening and Job Matching Engine
+      - key: API_V1_PREFIX
+        value: /api/v1
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: EMBEDDING_MODEL_NAME
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: GMAIL_CREDENTIALS_PATH
+        value: /app/oauth/credentials.json
+      - key: GMAIL_TOKEN_PATH
+        value: /app/oauth/token.json

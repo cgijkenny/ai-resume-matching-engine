@@ -1,0 +1,12 @@
+.DS_Store
+.env
+backend/.venv
+backend/.pytest_cache
+backend/credentials.json
+backend/token.json
+backend/oauth/credentials.json
+backend/oauth/token.json
+__pycache__/
+*.pyc
+frontend/node_modules
+frontend/dist

@@ -1,0 +1,6 @@
+.venv
+__pycache__
+*.pyc
+oauth
+credentials.json
+token.json

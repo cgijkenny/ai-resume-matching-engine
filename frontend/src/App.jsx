@@ -61,6 +61,7 @@ export default function App() {
   const [health, setHealth] = useState("checking");
   const [jobs, setJobs] = useState([]);
   const [resumes, setResumes] = useState([]);
+  const [gmailConnected, setGmailConnected] = useState(false);
   const [matches, setMatches] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -84,20 +85,23 @@ export default function App() {
 
   async function loadDashboard() {
     try {
-      const [healthRes, jobsRes, resumesRes] = await Promise.all([
+      const [healthRes, jobsRes, resumesRes, gmailStatusRes] = await Promise.all([
         api.get("/api/v1/health"),
         api.get("/api/v1/jobs"),
-        api.get("/api/v1/resumes")
+        api.get("/api/v1/resumes"),
+        api.get("/api/v1/gmail/status")
       ]);
       setHealth(healthRes.data.status);
       setErrorMessage("");
       setJobs(jobsRes.data);
       setResumes(resumesRes.data);
+      setGmailConnected(Boolean(gmailStatusRes.data.connected));
       if (!selectedJobId && jobsRes.data.length > 0) {
         setSelectedJobId(String(jobsRes.data[0].id));
       }
     } catch {
       setHealth("offline");
+      setGmailConnected(false);
       setErrorMessage("Backend API is offline. Start backend server on port 8000.");
     }
   }
@@ -105,6 +109,34 @@ export default function App() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gmailAuth = params.get("gmail_auth");
+    const message = params.get("message");
+
+    if (gmailAuth === "connected") {
+      setStatusMessage("Gmail connected successfully.");
+      setErrorMessage("");
+      loadDashboard();
+    } else if (gmailAuth === "error") {
+      setErrorMessage(message || "Gmail authorization failed.");
+    }
+
+    if (gmailAuth) {
+      params.delete("gmail_auth");
+      params.delete("message");
+      const queryString = params.toString();
+      const cleanUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}`;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
+  function connectGmail() {
+    setStatusMessage("");
+    setErrorMessage("");
+    window.location.assign("/api/v1/gmail/oauth/start");
+  }
 
   async function createJob(event) {
     event.preventDefault();
@@ -229,23 +261,47 @@ export default function App() {
     }
   }
 
+  const healthClass =
+    health === "ok" ? "chip-ok" : health === "offline" ? "chip-offline" : "chip-pending";
+  const healthLabel = typeof health === "string" ? health.toUpperCase() : String(health);
+
   return (
     <main className="layout">
       <header className="hero">
+        <p className="hero-topline">Recruitment Intelligence Suite</p>
         <h1>AI Resume Screening and Job Matching Engine</h1>
-        <p>API status: <strong>{health}</strong></p>
+        <p className="hero-subtitle">
+          Import resumes from Gmail or files, extract skills, and rank candidates by fit.
+        </p>
+        <div className="hero-metrics">
+          <p className={`metric-chip ${healthClass}`}>
+            API <strong>{healthLabel}</strong>
+          </p>
+          <p className="metric-chip">
+            Jobs <strong>{jobs.length}</strong>
+          </p>
+          <p className="metric-chip">
+            Resumes <strong>{resumes.length}</strong>
+          </p>
+          <p className={`metric-chip ${gmailConnected ? "chip-ok" : "chip-pending"}`}>
+            Gmail <strong>{gmailConnected ? "CONNECTED" : "NOT CONNECTED"}</strong>
+          </p>
+        </div>
       </header>
 
       {(statusMessage || errorMessage) && (
         <section className="status-panel">
-          {statusMessage && <p className="status-ok">{statusMessage}</p>}
-          {errorMessage && <p className="status-error">{errorMessage}</p>}
+          {statusMessage && <p className="status-ok status-note">{statusMessage}</p>}
+          {errorMessage && <p className="status-error status-note">{errorMessage}</p>}
         </section>
       )}
 
       <section className="grid">
         <article className="card">
-          <h2>Create Job</h2>
+          <div className="card-head">
+            <h2>Create Job</h2>
+            <span className="card-tag">Role Setup</span>
+          </div>
           <form onSubmit={createJob}>
             <input
               value={jobTitle}
@@ -266,17 +322,21 @@ export default function App() {
             />
             <button type="submit">Save Job</button>
           </form>
-          <ul>
+          <ul className="job-list">
             {jobs.map((job) => (
               <li key={job.id}>
                 <strong>{job.title}</strong>
               </li>
             ))}
+            {jobs.length === 0 && <li className="muted">No jobs created yet.</li>}
           </ul>
         </article>
 
         <article className="card">
-          <h2>Add Resume Text</h2>
+          <div className="card-head">
+            <h2>Add Resume Text</h2>
+            <span className="card-tag">Manual Entry</span>
+          </div>
           <form onSubmit={createResume}>
             <input
               value={resumeName}
@@ -300,7 +360,10 @@ export default function App() {
         </article>
 
         <article className="card">
-          <h2>Upload Resume File</h2>
+          <div className="card-head">
+            <h2>Upload Resume File</h2>
+            <span className="card-tag">PDF / DOCX / TXT</span>
+          </div>
           <form onSubmit={uploadResume}>
             <input
               value={uploadName}
@@ -320,12 +383,18 @@ export default function App() {
             />
             <button type="submit">Upload</button>
           </form>
-          <p>Total resumes: {resumes.length}</p>
+          <p className="muted">Total resumes: {resumes.length}</p>
         </article>
 
         <article className="card">
-          <h2>Import from Gmail</h2>
+          <div className="card-head">
+            <h2>Import from Gmail</h2>
+            <span className="card-tag">OAuth</span>
+          </div>
           <form onSubmit={importFromGmail}>
+            <p className={`connection-status ${gmailConnected ? "is-connected" : "is-disconnected"}`}>
+              Connection: <strong>{gmailConnected ? "Connected" : "Not connected"}</strong>
+            </p>
             <input
               type="number"
               min="1"
@@ -333,7 +402,7 @@ export default function App() {
               value={gmailMaxMessages}
               onChange={(event) => {
                 const value = Number(event.target.value);
-                setGmailMaxMessages(Number.isNaN(value) ? 20 : value);
+                setGmailMaxMessages(Number.isNaN(value) ? 5 : value);
               }}
               placeholder="Max emails to scan"
               required
@@ -348,19 +417,25 @@ export default function App() {
               onChange={(event) => setGmailQuery(event.target.value)}
               placeholder="Extra Gmail query (optional)"
             />
-            <button type="submit" disabled={isImportingGmail}>
-              {isImportingGmail ? "Importing..." : "Connect and Import"}
+            <button type="button" className="button-secondary" onClick={connectGmail}>
+              {gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
             </button>
-            <button type="button" onClick={loadDashboard}>
+            <button type="submit" disabled={isImportingGmail || !gmailConnected}>
+              {isImportingGmail ? "Importing..." : "Import Resumes"}
+            </button>
+            <button type="button" className="button-ghost" onClick={loadDashboard}>
               Refresh API Status
             </button>
           </form>
-          {isImportingGmail && <p>Import in progress...</p>}
+          {isImportingGmail && <p className="muted">Import in progress...</p>}
         </article>
       </section>
 
-      <section className="card">
-        <h2>Match Resumes to Job</h2>
+      <section className="card card-wide">
+        <div className="card-head">
+          <h2>Match Resumes to Job</h2>
+          <span className="card-tag">Ranking</span>
+        </div>
         <div className="row">
           <select
             value={selectedJobId}
@@ -378,33 +453,37 @@ export default function App() {
           </button>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Candidate</th>
-              <th>Final</th>
-              <th>Semantic</th>
-              <th>Skills</th>
-              <th>Missing Skills</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matches.map((result) => (
-              <tr key={result.resume_id}>
-                <td>{result.candidate_name}</td>
-                <td>{toPercent(result.final_score)}</td>
-                <td>{toPercent(result.semantic_score)}</td>
-                <td>{toPercent(result.skill_score)}</td>
-                <td>{result.missing_skills.join(", ") || "-"}</td>
-              </tr>
-            ))}
-            {matches.length === 0 && (
+        <div className="table-wrap">
+          <table className="match-table">
+            <thead>
               <tr>
-                <td colSpan="5">No matching results yet.</td>
+                <th>Candidate</th>
+                <th>Final</th>
+                <th>Semantic</th>
+                <th>Skills</th>
+                <th>Missing Skills</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {matches.map((result) => (
+                <tr key={result.resume_id}>
+                  <td>{result.candidate_name}</td>
+                  <td className="score">{toPercent(result.final_score)}</td>
+                  <td>{toPercent(result.semantic_score)}</td>
+                  <td>{toPercent(result.skill_score)}</td>
+                  <td>{result.missing_skills.join(", ") || "-"}</td>
+                </tr>
+              ))}
+              {matches.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="muted">
+                    No matching results yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );

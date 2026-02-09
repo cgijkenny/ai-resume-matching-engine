@@ -5,6 +5,7 @@ Web app to screen resumes and rank candidates against a job using NLP and semant
 ## Features
 - Create and manage job descriptions with required skills.
 - Import resumes from Gmail attachments (`.pdf`, `.docx`, `.txt`).
+- Connect Gmail directly from the web app via OAuth.
 - Upload resume files manually from the UI.
 - Run matching and get ranked candidates with:
   - final score
@@ -45,33 +46,28 @@ Open:
 - Web UI: `http://localhost:5173`
 - API docs: `http://localhost:8000/docs`
 
-## Gmail OAuth Setup (One Time)
-1. Place OAuth client file:
-- `backend/oauth/credentials.json`
-
-2. Generate Gmail token:
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-GMAIL_CREDENTIALS_PATH=oauth/credentials.json GMAIL_TOKEN_PATH=oauth/token.json python -m app.scripts.gmail_auth
-```
-
-3. Restart backend container:
-```bash
-cd <project-root>
-docker compose restart backend
-```
+## Gmail OAuth Setup (Non-Technical User Flow)
+1. In Google Cloud Console create OAuth client type `Web application`.
+2. Add authorized redirect URI:
+- `https://<your-domain>/api/v1/gmail/oauth/callback`
+3. Set deployment secrets:
+- `GMAIL_CREDENTIALS_JSON` (full OAuth client JSON)
+- `GMAIL_CREDENTIALS_PATH=/app/oauth/credentials.json`
+- `GMAIL_TOKEN_PATH=/app/oauth/token.json`
+4. End users click `Connect Gmail` in UI and authorize from browser.
 
 ## How to Use
 1. Open the web app.
 2. Create a job.
-3. Import resumes from Gmail or upload resume files.
-4. Select the job and click `Run Matching`.
+3. Click `Connect Gmail` once, then click `Import Resumes`.
+4. Or upload resumes manually.
+5. Select the job and click `Run Matching`.
 
 ## Main API Endpoints
 - `GET /api/v1/health`
+- `GET /api/v1/gmail/status`
+- `GET /api/v1/gmail/oauth/start`
+- `GET /api/v1/gmail/oauth/callback`
 - `POST /api/v1/jobs`
 - `GET /api/v1/jobs`
 - `POST /api/v1/resumes/upload`
@@ -84,7 +80,8 @@ docker compose restart backend
 3. Render uses `render.yaml` and builds the service.
 4. Add these environment variables in Render:
 - `GMAIL_CREDENTIALS_JSON` = full JSON content of OAuth credentials file
-- `GMAIL_TOKEN_JSON` = full JSON content of token file
+- `GMAIL_CREDENTIALS_PATH` = `/app/oauth/credentials.json`
+- `GMAIL_TOKEN_PATH` = `/app/oauth/token.json`
 5. Deploy latest commit.
 
 ## Environment Variables

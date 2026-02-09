@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import json
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import Flow
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
@@ -30,6 +33,13 @@ class GmailAttachment:
     raw_bytes: bytes
 
 
+@dataclass
+class PendingOAuthState:
+    state: str
+    redirect_uri: str
+    created_at: float
+
+
 class GmailAuthRequiredError(RuntimeError):
     """Raised when Gmail OAuth token is missing or invalid."""
 
@@ -37,12 +47,31 @@ class GmailAuthRequiredError(RuntimeError):
 class GmailResumeClient:
     def __init__(self) -> None:
         self._service = None
+        self._pending_states: dict[str, PendingOAuthState] = {}
+        self._oauth_state_ttl_seconds = 900
 
     def _credentials_path(self) -> Path:
         return Path(settings.gmail_credentials_path)
 
     def _token_path(self) -> Path:
         return Path(settings.gmail_token_path)
+
+    def _client_config(self) -> dict:
+        credentials_path = self._credentials_path()
+        if not credentials_path.exists():
+            raise GmailAuthRequiredError(
+                f"Missing Gmail OAuth client file at `{credentials_path}`."
+            )
+        try:
+            return json.loads(credentials_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise GmailAuthRequiredError(
+                f"Invalid Gmail OAuth client JSON at `{credentials_path}`."
+            ) from exc
+
+    def _is_web_oauth_client(self) -> bool:
+        config = self._client_config()
+        return "web" in config
 
     def _load_credentials(self, allow_interactive: bool = False) -> Credentials:
         token_path = self._token_path()
@@ -57,7 +86,7 @@ class GmailResumeClient:
             except Exception as exc:
                 raise GmailAuthRequiredError(
                     "Gmail token exists but is invalid. "
-                    "Delete `backend/token.json` and run `python -m app.scripts.gmail_auth`."
+                    "Reconnect Gmail from the app."
                 ) from exc
 
         if credentials and credentials.expired and credentials.refresh_token:
@@ -66,7 +95,7 @@ class GmailResumeClient:
             except Exception as exc:
                 raise GmailAuthRequiredError(
                     "Could not refresh Gmail token. "
-                    "Run `python -m app.scripts.gmail_auth` to re-authorize."
+                    "Reconnect Gmail from the app."
                 ) from exc
             token_path.write_text(credentials.to_json(), encoding="utf-8")
             return credentials
@@ -78,14 +107,12 @@ class GmailResumeClient:
         if not credentials_path.exists():
             raise GmailAuthRequiredError(
                 f"Missing Gmail OAuth client file at `{credentials_path}`. "
-                "Place your downloaded Google OAuth JSON there, then run "
-                "`python -m app.scripts.gmail_auth`."
+                "Upload it in deployment settings."
             )
 
         if not allow_interactive:
             raise GmailAuthRequiredError(
-                "Gmail is not authorized yet. "
-                "Run `python -m app.scripts.gmail_auth` once, then retry import."
+                "Gmail is not connected yet. Click `Connect Gmail` in the app."
             )
 
         flow = InstalledAppFlow.from_client_secrets_file(
@@ -95,6 +122,13 @@ class GmailResumeClient:
         credentials = flow.run_local_server(port=0, open_browser=True)
         token_path.write_text(credentials.to_json(), encoding="utf-8")
         return credentials
+
+    def is_connected(self) -> bool:
+        try:
+            credentials = self._load_credentials(allow_interactive=False)
+            return bool(credentials and credentials.valid)
+        except GmailAuthRequiredError:
+            return False
 
     def _get_service(self):
         if self._service is None:
@@ -109,6 +143,67 @@ class GmailResumeClient:
 
     def authorize_interactive(self) -> None:
         self._load_credentials(allow_interactive=True)
+        self._service = None
+
+    def _cleanup_expired_states(self) -> None:
+        now = time.time()
+        expired = [
+            state_key
+            for state_key, payload in self._pending_states.items()
+            if (now - payload.created_at) > self._oauth_state_ttl_seconds
+        ]
+        for state_key in expired:
+            self._pending_states.pop(state_key, None)
+
+    def start_browser_oauth(self, redirect_uri: str) -> str:
+        if not self._is_web_oauth_client():
+            raise GmailAuthRequiredError(
+                "OAuth client is not configured as `Web application`. "
+                "Create a web OAuth client in Google Cloud and update credentials."
+            )
+
+        self._cleanup_expired_states()
+        flow = Flow.from_client_config(
+            self._client_config(),
+            scopes=GMAIL_SCOPES,
+            redirect_uri=redirect_uri,
+        )
+        auth_url, state = flow.authorization_url(
+            access_type="offline",
+            include_granted_scopes="true",
+            prompt="consent",
+        )
+        self._pending_states[state] = PendingOAuthState(
+            state=state,
+            redirect_uri=redirect_uri,
+            created_at=time.time(),
+        )
+        return auth_url
+
+    def finish_browser_oauth(self, state: str, code: str, redirect_uri: str) -> None:
+        self._cleanup_expired_states()
+        pending = self._pending_states.get(state)
+        if pending is None:
+            raise GmailAuthRequiredError("OAuth session expired. Click `Connect Gmail` again.")
+        if pending.redirect_uri != redirect_uri:
+            self._pending_states.pop(state, None)
+            raise GmailAuthRequiredError("OAuth redirect mismatch. Start Gmail connection again.")
+
+        flow = Flow.from_client_config(
+            self._client_config(),
+            scopes=GMAIL_SCOPES,
+            state=state,
+            redirect_uri=redirect_uri,
+        )
+        try:
+            flow.fetch_token(code=code)
+        except Exception as exc:
+            raise GmailAuthRequiredError("Could not complete Gmail authorization.") from exc
+
+        token_path = self._token_path()
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(flow.credentials.to_json(), encoding="utf-8")
+        self._pending_states.pop(state, None)
         self._service = None
 
     def _build_query(self, extra_query: str | None, label: str | None) -> str:

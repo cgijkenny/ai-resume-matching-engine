@@ -6,6 +6,8 @@ Web app to screen resumes and rank candidates against a job using NLP and semant
 - Create and manage job descriptions with required skills.
 - Import resumes from Gmail attachments (`.pdf`, `.docx`, `.txt`).
 - Connect Gmail directly from the web app via OAuth.
+- Connect LinkedIn directly from the web app via OAuth.
+- Import LinkedIn profile basics as a resume.
 - Upload resume files manually from the UI.
 - Run matching and get ranked candidates with:
   - final score
@@ -56,22 +58,47 @@ Open:
 - `GMAIL_TOKEN_PATH=/app/oauth/token.json`
 4. End users click `Connect Gmail` in UI and authorize from browser.
 
+## LinkedIn OAuth Setup (Non-Technical User Flow)
+1. Open [LinkedIn Developers](https://www.linkedin.com/developers/apps), create/select your app.
+2. Add the `Sign In with LinkedIn using OpenID Connect` product.
+3. In your app auth settings add redirect URL:
+- `https://<your-domain>/api/v1/linkedin/oauth/callback`
+4. In deployment environment set:
+- `LINKEDIN_CLIENT_ID`
+- `LINKEDIN_CLIENT_SECRET`
+- `LINKEDIN_TOKEN_PATH=/app/oauth/linkedin_token.json`
+- `LINKEDIN_SCOPES=openid profile email`
+5. End users click `Connect LinkedIn` in UI and authorize from browser.
+
 ## How to Use
 1. Open the web app.
 2. Create a job.
 3. Click `Connect Gmail` once, then click `Import Resumes`.
-4. Or upload resumes manually.
-5. Select the job and click `Run Matching`.
+4. Click `Connect LinkedIn` once, then click `Import LinkedIn Profile`.
+5. Or upload resumes manually.
+6. Select the job and click `Run Matching`.
+
+## Non-Technical User Flow
+1. Open the app URL.
+2. Use `Sign in with Gmail` or `Sign in with LinkedIn` in the UI.
+3. Click import button to fetch profile/resumes.
+4. Run matching from the same page.
+
+Note: only the admin/deployer does OAuth app setup once in Google/LinkedIn and Render.
 
 ## Main API Endpoints
 - `GET /api/v1/health`
 - `GET /api/v1/gmail/status`
 - `GET /api/v1/gmail/oauth/start`
 - `GET /api/v1/gmail/oauth/callback`
+- `GET /api/v1/linkedin/status`
+- `GET /api/v1/linkedin/oauth/start`
+- `GET /api/v1/linkedin/oauth/callback`
 - `POST /api/v1/jobs`
 - `GET /api/v1/jobs`
 - `POST /api/v1/resumes/upload`
 - `POST /api/v1/resumes/import/gmail`
+- `POST /api/v1/resumes/import/linkedin`
 - `POST /api/v1/resumes/match/{job_id}`
 
 ## Deploy as Public Web App (Render)
@@ -82,6 +109,10 @@ Open:
 - `GMAIL_CREDENTIALS_JSON` = full JSON content of OAuth credentials file
 - `GMAIL_CREDENTIALS_PATH` = `/app/oauth/credentials.json`
 - `GMAIL_TOKEN_PATH` = `/app/oauth/token.json`
+- `LINKEDIN_CLIENT_ID` = LinkedIn app client ID
+- `LINKEDIN_CLIENT_SECRET` = LinkedIn app client secret
+- `LINKEDIN_TOKEN_PATH` = `/app/oauth/linkedin_token.json`
+- `LINKEDIN_SCOPES` = `openid profile email`
 5. Deploy latest commit.
 
 ## Environment Variables
@@ -89,4 +120,5 @@ See `.env.example` for all variables.
 
 ## Notes
 - Keep Gmail credentials/token private.
+- Keep LinkedIn client secret/token private.
 - Do not commit secret files.

@@ -152,6 +152,22 @@ h2 {
   border-left-color: var(--error);
 }
 
+.auth-quick {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-hint {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.auth-actions {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 .grid {
   display: grid;
   gap: 16px;
@@ -180,8 +196,12 @@ h2 {
   animation-delay: 0.09s;
 }
 
-.card-wide {
+.grid .card:nth-child(5) {
   animation-delay: 0.12s;
+}
+
+.card-wide {
+  animation-delay: 0.15s;
 }
 
 .card-head {
@@ -275,6 +295,11 @@ button:disabled {
   box-shadow: 0 8px 18px rgba(34, 124, 107, 0.22);
 }
 
+.button-linkedin {
+  background: linear-gradient(140deg, #0b66c2 0%, #0057a8 100%);
+  box-shadow: 0 8px 18px rgba(6, 87, 168, 0.26);
+}
+
 .button-ghost {
   background: #edf4fa;
   color: #214461;
@@ -284,6 +309,26 @@ button:disabled {
 
 .button-ghost:hover {
   background: #e0edf8;
+}
+
+.advanced-options {
+  border: 1px dashed #bdd0df;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f8fbff;
+}
+
+.advanced-options summary {
+  cursor: pointer;
+  color: #3e5b77;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.advanced-grid {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
 }
 
 .job-list {

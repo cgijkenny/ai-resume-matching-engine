@@ -62,6 +62,7 @@ export default function App() {
   const [jobs, setJobs] = useState([]);
   const [resumes, setResumes] = useState([]);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [matches, setMatches] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -82,26 +83,30 @@ export default function App() {
   const [gmailQuery, setGmailQuery] = useState("");
   const [gmailLabel, setGmailLabel] = useState("");
   const [isImportingGmail, setIsImportingGmail] = useState(false);
+  const [isImportingLinkedin, setIsImportingLinkedin] = useState(false);
 
   async function loadDashboard() {
     try {
-      const [healthRes, jobsRes, resumesRes, gmailStatusRes] = await Promise.all([
+      const [healthRes, jobsRes, resumesRes, gmailStatusRes, linkedinStatusRes] = await Promise.all([
         api.get("/api/v1/health"),
         api.get("/api/v1/jobs"),
         api.get("/api/v1/resumes"),
-        api.get("/api/v1/gmail/status")
+        api.get("/api/v1/gmail/status"),
+        api.get("/api/v1/linkedin/status")
       ]);
       setHealth(healthRes.data.status);
       setErrorMessage("");
       setJobs(jobsRes.data);
       setResumes(resumesRes.data);
       setGmailConnected(Boolean(gmailStatusRes.data.connected));
+      setLinkedinConnected(Boolean(linkedinStatusRes.data.connected));
       if (!selectedJobId && jobsRes.data.length > 0) {
         setSelectedJobId(String(jobsRes.data[0].id));
       }
     } catch {
       setHealth("offline");
       setGmailConnected(false);
+      setLinkedinConnected(false);
       setErrorMessage("Backend API is offline. Start backend server on port 8000.");
     }
   }
@@ -113,18 +118,28 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const gmailAuth = params.get("gmail_auth");
+    const linkedinAuth = params.get("linkedin_auth");
     const message = params.get("message");
 
     if (gmailAuth === "connected") {
-      setStatusMessage("Gmail connected successfully.");
+      setStatusMessage("Gmail sign-in successful. You can now import resumes.");
       setErrorMessage("");
       loadDashboard();
     } else if (gmailAuth === "error") {
       setErrorMessage(message || "Gmail authorization failed.");
     }
 
-    if (gmailAuth) {
+    if (linkedinAuth === "connected") {
+      setStatusMessage("LinkedIn sign-in successful. You can now import profile.");
+      setErrorMessage("");
+      loadDashboard();
+    } else if (linkedinAuth === "error") {
+      setErrorMessage(message || "LinkedIn authorization failed.");
+    }
+
+    if (gmailAuth || linkedinAuth) {
       params.delete("gmail_auth");
+      params.delete("linkedin_auth");
       params.delete("message");
       const queryString = params.toString();
       const cleanUrl = `${window.location.pathname}${queryString ? `?${queryString}` : ""}`;
@@ -136,6 +151,12 @@ export default function App() {
     setStatusMessage("");
     setErrorMessage("");
     window.location.assign("/api/v1/gmail/oauth/start");
+  }
+
+  function connectLinkedin() {
+    setStatusMessage("");
+    setErrorMessage("");
+    window.location.assign("/api/v1/linkedin/oauth/start");
   }
 
   async function createJob(event) {
@@ -245,6 +266,22 @@ export default function App() {
     }
   }
 
+  async function importFromLinkedin(event) {
+    event.preventDefault();
+    setErrorMessage("");
+    setStatusMessage("");
+    setIsImportingLinkedin(true);
+    try {
+      const response = await api.post("/api/v1/resumes/import/linkedin");
+      setResumes((current) => [...current, response.data]);
+      setStatusMessage("LinkedIn profile imported as resume.");
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, "LinkedIn import failed."));
+    } finally {
+      setIsImportingLinkedin(false);
+    }
+  }
+
   async function runMatching() {
     if (!selectedJobId) {
       setErrorMessage("Select a job first.");
@@ -271,7 +308,7 @@ export default function App() {
         <p className="hero-topline">Recruitment Intelligence Suite</p>
         <h1>AI Resume Screening and Job Matching Engine</h1>
         <p className="hero-subtitle">
-          Import resumes from Gmail or files, extract skills, and rank candidates by fit.
+          Import resumes from Gmail, LinkedIn, or files, extract skills, and rank candidates by fit.
         </p>
         <div className="hero-metrics">
           <p className={`metric-chip ${healthClass}`}>
@@ -286,6 +323,9 @@ export default function App() {
           <p className={`metric-chip ${gmailConnected ? "chip-ok" : "chip-pending"}`}>
             Gmail <strong>{gmailConnected ? "CONNECTED" : "NOT CONNECTED"}</strong>
           </p>
+          <p className={`metric-chip ${linkedinConnected ? "chip-ok" : "chip-pending"}`}>
+            LinkedIn <strong>{linkedinConnected ? "CONNECTED" : "NOT CONNECTED"}</strong>
+          </p>
         </div>
       </header>
 
@@ -295,6 +335,24 @@ export default function App() {
           {errorMessage && <p className="status-error status-note">{errorMessage}</p>}
         </section>
       )}
+
+      <section className="card auth-quick">
+        <div className="card-head">
+          <h2>Quick Sign-In</h2>
+          <span className="card-tag">Non-Technical Flow</span>
+        </div>
+        <p className="quick-hint">
+          Step 1: sign in with Gmail or LinkedIn. Step 2: click import. No technical setup is needed for end users.
+        </p>
+        <div className="auth-actions">
+          <button type="button" className="button-secondary" onClick={connectGmail}>
+            {gmailConnected ? "Signed in to Gmail" : "Sign in with Gmail"}
+          </button>
+          <button type="button" className="button-linkedin" onClick={connectLinkedin}>
+            {linkedinConnected ? "Signed in to LinkedIn" : "Sign in with LinkedIn"}
+          </button>
+        </div>
+      </section>
 
       <section className="grid">
         <article className="card">
@@ -395,39 +453,64 @@ export default function App() {
             <p className={`connection-status ${gmailConnected ? "is-connected" : "is-disconnected"}`}>
               Connection: <strong>{gmailConnected ? "Connected" : "Not connected"}</strong>
             </p>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={gmailMaxMessages}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                setGmailMaxMessages(Number.isNaN(value) ? 5 : value);
-              }}
-              placeholder="Max emails to scan"
-              required
-            />
-            <input
-              value={gmailLabel}
-              onChange={(event) => setGmailLabel(event.target.value)}
-              placeholder="Gmail label (optional)"
-            />
-            <input
-              value={gmailQuery}
-              onChange={(event) => setGmailQuery(event.target.value)}
-              placeholder="Extra Gmail query (optional)"
-            />
             <button type="button" className="button-secondary" onClick={connectGmail}>
-              {gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
+              {gmailConnected ? "Sign in again with Gmail" : "Sign in with Gmail"}
             </button>
             <button type="submit" disabled={isImportingGmail || !gmailConnected}>
               {isImportingGmail ? "Importing..." : "Import Resumes"}
             </button>
+            <details className="advanced-options">
+              <summary>Advanced filters (optional)</summary>
+              <div className="advanced-grid">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={gmailMaxMessages}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setGmailMaxMessages(Number.isNaN(value) ? 5 : value);
+                  }}
+                  placeholder="Max emails to scan"
+                />
+                <input
+                  value={gmailLabel}
+                  onChange={(event) => setGmailLabel(event.target.value)}
+                  placeholder="Gmail label (optional)"
+                />
+                <input
+                  value={gmailQuery}
+                  onChange={(event) => setGmailQuery(event.target.value)}
+                  placeholder="Extra Gmail query (optional)"
+                />
+              </div>
+            </details>
             <button type="button" className="button-ghost" onClick={loadDashboard}>
               Refresh API Status
             </button>
           </form>
           {isImportingGmail && <p className="muted">Import in progress...</p>}
+        </article>
+
+        <article className="card">
+          <div className="card-head">
+            <h2>Import from LinkedIn</h2>
+            <span className="card-tag">OAuth</span>
+          </div>
+          <form onSubmit={importFromLinkedin}>
+            <p className={`connection-status ${linkedinConnected ? "is-connected" : "is-disconnected"}`}>
+              Connection: <strong>{linkedinConnected ? "Connected" : "Not connected"}</strong>
+            </p>
+            <button type="button" className="button-linkedin" onClick={connectLinkedin}>
+              {linkedinConnected ? "Sign in again with LinkedIn" : "Sign in with LinkedIn"}
+            </button>
+            <button type="submit" disabled={isImportingLinkedin || !linkedinConnected}>
+              {isImportingLinkedin ? "Importing..." : "Import LinkedIn Profile"}
+            </button>
+          </form>
+          <p className="muted">
+            Imports your LinkedIn profile basics as one resume entry.
+          </p>
         </article>
       </section>
 

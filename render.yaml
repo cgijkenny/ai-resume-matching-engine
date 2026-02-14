@@ -18,3 +18,11 @@ services:
         value: /app/oauth/credentials.json
       - key: GMAIL_TOKEN_PATH
         value: /app/oauth/token.json
+      - key: LINKEDIN_CLIENT_ID
+        value: ""
+      - key: LINKEDIN_CLIENT_SECRET
+        value: ""
+      - key: LINKEDIN_TOKEN_PATH
+        value: /app/oauth/linkedin_token.json
+      - key: LINKEDIN_SCOPES
+        value: "openid profile email"

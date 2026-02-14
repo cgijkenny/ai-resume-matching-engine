@@ -4,6 +4,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from app.models import GmailImportResponse, MatchResult, Resume, ResumeCreate
 from app.services.gmail_client import GmailAuthRequiredError, gmail_resume_client
+from app.services.linkedin_client import LinkedInAuthRequiredError, linkedin_resume_client
 from app.services.matcher import matcher
 from app.services.resume_parser import extract_text_from_bytes, extract_text_from_upload
 from app.store import store
@@ -131,6 +132,32 @@ def import_resumes_from_gmail(
         resumes=imported_resumes,
         errors=errors,
     )
+
+
+@router.post("/import/linkedin", response_model=Resume, status_code=201)
+def import_resume_from_linkedin() -> Resume:
+    try:
+        profile = linkedin_resume_client.fetch_profile_resume()
+    except LinkedInAuthRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LinkedIn import failed: {exc}") from exc
+
+    candidate_name = profile["candidate_name"]
+    text = profile["text"]
+    skills = profile.get("skills", [])
+
+    if _is_duplicate_resume(candidate_name=candidate_name, text=text):
+        raise HTTPException(status_code=409, detail="LinkedIn profile already imported.")
+
+    resume = Resume(
+        id=store.next_resume_id(),
+        candidate_name=candidate_name,
+        text=text,
+        skills=skills,
+    )
+    store.resumes.append(resume)
+    return resume
 
 
 @router.post("/match/{job_id}", response_model=list[MatchResult])

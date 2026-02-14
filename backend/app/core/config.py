@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     gmail_credentials_path: str = "credentials.json"
     gmail_token_path: str = "token.json"
     gmail_resume_label: str = ""
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    linkedin_token_path: str = "linkedin_token.json"
+    linkedin_scopes: str = "openid profile email"
 
     model_config = SettingsConfigDict(
         env_file=".env",

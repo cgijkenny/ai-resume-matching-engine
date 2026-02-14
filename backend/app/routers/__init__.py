@@ -3,10 +3,12 @@ from fastapi import APIRouter
 from app.routers.gmail import router as gmail_router
 from app.routers.health import router as health_router
 from app.routers.jobs import router as jobs_router
+from app.routers.linkedin import router as linkedin_router
 from app.routers.resumes import router as resumes_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, tags=["health"])
 api_router.include_router(gmail_router, prefix="/gmail", tags=["gmail"])
+api_router.include_router(linkedin_router, prefix="/linkedin", tags=["linkedin"])
 api_router.include_router(jobs_router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(resumes_router, prefix="/resumes", tags=["resumes"])

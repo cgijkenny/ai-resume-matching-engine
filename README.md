@@ -1,4 +1,4 @@
-# AI Resume Screening and Job Matching Engine
+# One Stop Resume Engine
 
 Web app to screen resumes and rank candidates against a job using NLP and semantic similarity.
 
@@ -7,7 +7,9 @@ Web app to screen resumes and rank candidates against a job using NLP and semant
 - Import resumes from Gmail attachments (`.pdf`, `.docx`, `.txt`).
 - Connect Gmail directly from the web app via OAuth.
 - Connect LinkedIn directly from the web app via OAuth.
-- Import LinkedIn profile basics as a resume.
+- One-click connect flow for Gmail then LinkedIn.
+- Combined import endpoint for Gmail + LinkedIn in one action.
+- Import LinkedIn profile basics as a resume snapshot.
 - Upload resume files manually from the UI.
 - Run matching and get ranked candidates with:
   - final score
@@ -75,8 +77,9 @@ Open:
 2. Create a job.
 3. Click `Connect Gmail` once, then click `Import Resumes`.
 4. Click `Connect LinkedIn` once, then click `Import LinkedIn Profile`.
-5. Or upload resumes manually.
-6. Select the job and click `Run Matching`.
+5. Or click `Connect Both Accounts` then `Import Gmail + LinkedIn`.
+6. Or upload resumes manually.
+7. Select the job and click `Run Matching`.
 
 ## Non-Technical User Flow
 1. Open the app URL.
@@ -99,7 +102,12 @@ Note: only the admin/deployer does OAuth app setup once in Google/LinkedIn and R
 - `POST /api/v1/resumes/upload`
 - `POST /api/v1/resumes/import/gmail`
 - `POST /api/v1/resumes/import/linkedin`
+- `POST /api/v1/resumes/import/combined`
 - `POST /api/v1/resumes/match/{job_id}`
+
+## LinkedIn Data Scope Note
+For standard LinkedIn OAuth apps, LinkedIn exposes user profile info through OpenID Connect.
+LinkedIn job-application resume retrieval is restricted to partner programs/APIs and is not available in standard public app access.
 
 ## Deploy as Public Web App (Render)
 1. Push project to GitHub.

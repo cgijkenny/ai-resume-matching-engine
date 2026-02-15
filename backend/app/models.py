@@ -28,6 +28,16 @@ class GmailImportResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class CombinedImportResponse(BaseModel):
+    gmail_imported_count: int
+    gmail_skipped_count: int
+    linkedin_imported_count: int
+    total_imported_count: int
+    resumes: list[Resume]
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 class MatchResult(BaseModel):
     resume_id: int
     candidate_name: str

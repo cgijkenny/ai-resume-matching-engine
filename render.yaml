@@ -1,13 +1,13 @@
 services:
   - type: web
-    name: ai-resume-matching-engine
+    name: one-stop-resume-engine
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
     healthCheckPath: /api/v1/health
     envVars:
       - key: APP_NAME
-        value: AI Resume Screening and Job Matching Engine
+        value: One Stop Resume Engine
       - key: API_V1_PREFIX
         value: /api/v1
       - key: CORS_ORIGINS

@@ -28,10 +28,14 @@ def gmail_status() -> GmailConnectionStatus:
 
 
 @router.get("/oauth/start")
-def gmail_oauth_start(request: Request) -> RedirectResponse:
+def gmail_oauth_start(
+    request: Request,
+    next_provider: str | None = None,
+) -> RedirectResponse:
     try:
         auth_url = gmail_resume_client.start_browser_oauth(
             redirect_uri=_callback_url(request),
+            next_provider=next_provider,
         )
     except GmailAuthRequiredError as exc:
         error_url = f"{_app_base_url(request)}/?gmail_auth=error&message={quote(str(exc))}"
@@ -62,7 +66,7 @@ def gmail_oauth_callback(
         )
 
     try:
-        gmail_resume_client.finish_browser_oauth(
+        next_provider = gmail_resume_client.finish_browser_oauth(
             state=state,
             code=code,
             redirect_uri=_callback_url(request),
@@ -75,6 +79,12 @@ def gmail_oauth_callback(
     except Exception:
         return RedirectResponse(
             url=f"{base_url}/?gmail_auth=error&message={quote('Unexpected OAuth error.')}",
+            status_code=302,
+        )
+
+    if next_provider == "linkedin":
+        return RedirectResponse(
+            url=f"{base_url}{settings.api_v1_prefix}/linkedin/oauth/start",
             status_code=302,
         )
 

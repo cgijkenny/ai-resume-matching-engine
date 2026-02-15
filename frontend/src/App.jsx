@@ -84,6 +84,7 @@ export default function App() {
   const [gmailLabel, setGmailLabel] = useState("");
   const [isImportingGmail, setIsImportingGmail] = useState(false);
   const [isImportingLinkedin, setIsImportingLinkedin] = useState(false);
+  const [isImportingCombined, setIsImportingCombined] = useState(false);
 
   async function loadDashboard() {
     try {
@@ -157,6 +158,21 @@ export default function App() {
     setStatusMessage("");
     setErrorMessage("");
     window.location.assign("/api/v1/linkedin/oauth/start");
+  }
+
+  function connectBothAccounts() {
+    setStatusMessage("");
+    setErrorMessage("");
+
+    if (!gmailConnected) {
+      window.location.assign("/api/v1/gmail/oauth/start?next_provider=linkedin");
+      return;
+    }
+    if (!linkedinConnected) {
+      window.location.assign("/api/v1/linkedin/oauth/start");
+      return;
+    }
+    setStatusMessage("Both Gmail and LinkedIn are already connected.");
   }
 
   async function createJob(event) {
@@ -282,6 +298,44 @@ export default function App() {
     }
   }
 
+  async function importFromBothSources() {
+    if (!gmailConnected || !linkedinConnected) {
+      setErrorMessage("Connect both Gmail and LinkedIn before importing from both sources.");
+      return;
+    }
+
+    setErrorMessage("");
+    setStatusMessage("");
+    setIsImportingCombined(true);
+
+    const requestedMax = Math.min(100, Math.max(1, Number(gmailMaxMessages) || 5));
+    try {
+      const response = await api.post("/api/v1/resumes/import/combined", null, {
+        params: {
+          max_messages: requestedMax,
+          query: gmailQuery.trim() || undefined,
+          label: gmailLabel.trim() || undefined
+        }
+      });
+      const data = response.data;
+      setResumes((current) => [...current, ...data.resumes]);
+      setStatusMessage(
+        `Combined import completed. Gmail added ${data.gmail_imported_count}, LinkedIn added ${data.linkedin_imported_count}.`
+      );
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        setErrorMessage(data.errors[0]);
+      } else if (Array.isArray(data.warnings) && data.warnings.length > 0) {
+        setStatusMessage(
+          `Combined import completed. Gmail added ${data.gmail_imported_count}, LinkedIn added ${data.linkedin_imported_count}. ${data.warnings[0]}`
+        );
+      }
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, "Combined import failed."));
+    } finally {
+      setIsImportingCombined(false);
+    }
+  }
+
   async function runMatching() {
     if (!selectedJobId) {
       setErrorMessage("Select a job first.");
@@ -306,7 +360,7 @@ export default function App() {
     <main className="layout">
       <header className="hero">
         <p className="hero-topline">Recruitment Intelligence Suite</p>
-        <h1>AI Resume Screening and Job Matching Engine</h1>
+        <h1>One Stop Resume Engine</h1>
         <p className="hero-subtitle">
           Import resumes from Gmail, LinkedIn, or files, extract skills, and rank candidates by fit.
         </p>
@@ -350,6 +404,9 @@ export default function App() {
           </button>
           <button type="button" className="button-linkedin" onClick={connectLinkedin}>
             {linkedinConnected ? "Signed in to LinkedIn" : "Sign in with LinkedIn"}
+          </button>
+          <button type="button" onClick={connectBothAccounts}>
+            Connect Both Accounts
           </button>
         </div>
       </section>
@@ -458,6 +515,13 @@ export default function App() {
             </button>
             <button type="submit" disabled={isImportingGmail || !gmailConnected}>
               {isImportingGmail ? "Importing..." : "Import Resumes"}
+            </button>
+            <button
+              type="button"
+              onClick={importFromBothSources}
+              disabled={isImportingCombined || !gmailConnected || !linkedinConnected}
+            >
+              {isImportingCombined ? "Importing Both..." : "Import Gmail + LinkedIn"}
             </button>
             <details className="advanced-options">
               <summary>Advanced filters (optional)</summary>

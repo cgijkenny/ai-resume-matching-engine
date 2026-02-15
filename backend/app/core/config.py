@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    app_name: str = "AI Resume Screening and Job Matching Engine"
+    app_name: str = "One Stop Resume Engine"
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:5173"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"

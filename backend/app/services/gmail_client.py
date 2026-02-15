@@ -38,6 +38,7 @@ class PendingOAuthState:
     state: str
     redirect_uri: str
     created_at: float
+    next_provider: str | None = None
 
 
 class GmailAuthRequiredError(RuntimeError):
@@ -155,12 +156,14 @@ class GmailResumeClient:
         for state_key in expired:
             self._pending_states.pop(state_key, None)
 
-    def start_browser_oauth(self, redirect_uri: str) -> str:
+    def start_browser_oauth(self, redirect_uri: str, next_provider: str | None = None) -> str:
         if not self._is_web_oauth_client():
             raise GmailAuthRequiredError(
                 "OAuth client is not configured as `Web application`. "
                 "Create a web OAuth client in Google Cloud and update credentials."
             )
+        if next_provider not in {None, "linkedin"}:
+            raise GmailAuthRequiredError("Unsupported OAuth chain target.")
 
         self._cleanup_expired_states()
         flow = Flow.from_client_config(
@@ -177,10 +180,11 @@ class GmailResumeClient:
             state=state,
             redirect_uri=redirect_uri,
             created_at=time.time(),
+            next_provider=next_provider,
         )
         return auth_url
 
-    def finish_browser_oauth(self, state: str, code: str, redirect_uri: str) -> None:
+    def finish_browser_oauth(self, state: str, code: str, redirect_uri: str) -> str | None:
         self._cleanup_expired_states()
         pending = self._pending_states.get(state)
         if pending is None:
@@ -203,8 +207,10 @@ class GmailResumeClient:
         token_path = self._token_path()
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(flow.credentials.to_json(), encoding="utf-8")
+        next_provider = pending.next_provider
         self._pending_states.pop(state, None)
         self._service = None
+        return next_provider
 
     def _build_query(self, extra_query: str | None, label: str | None) -> str:
         parts = ["has:attachment", "(filename:pdf OR filename:docx OR filename:txt)"]

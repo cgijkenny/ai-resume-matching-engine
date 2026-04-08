@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     gmail_credentials_path: str = "credentials.json"
     gmail_token_path: str = "token.json"
     gmail_resume_label: str = ""
+    gmail_max_attachment_size_mb: int = 4
+    gmail_max_attachments_per_import: int = 30
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_token_path: str = "linkedin_token.json"

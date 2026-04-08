@@ -490,6 +490,235 @@ button:disabled {
   color: #0a587f;
 }
 
+.chart-card {
+  padding: 0;
+}
+
+.chart-accordion summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  color: #f0f8ff;
+  background: linear-gradient(124deg, #034f87 0%, #0d74b0 56%, #1695af 100%);
+  border-bottom: 1px solid rgba(217, 240, 255, 0.38);
+}
+
+.chart-accordion summary::-webkit-details-marker {
+  display: none;
+}
+
+.chart-summary-title {
+  font-family: "Manrope", "Avenir Next", sans-serif;
+  font-size: 1.07rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.chart-summary-subtitle {
+  font-size: 0.84rem;
+  color: rgba(235, 248, 255, 0.88);
+}
+
+.chart-content {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.chart-block {
+  border: 1px solid #d2dfec;
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+}
+
+.chart-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.chart-block h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.chart-note {
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #698198;
+  font-weight: 700;
+}
+
+.chart-upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #b9cee0;
+  background: linear-gradient(180deg, #f2f8fd 0%, #e7f0f8 100%);
+  color: #234a69;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chart-upload input {
+  display: none;
+}
+
+.screenshot-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.screenshot-card {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid #c9d9e8;
+  background: #fbfdff;
+  padding: 8px;
+}
+
+.screenshot-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 9px;
+  border: 1px solid #d8e5f2;
+}
+
+.screenshot-card figcaption {
+  font-size: 0.82rem;
+  color: #3b5973;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screenshot-remove {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 0.82rem;
+  color: #1d4667;
+  border: 1px solid #bed0df;
+  background: #f0f6fc;
+  box-shadow: none;
+}
+
+.screenshot-remove:hover {
+  background: #e8f1f9;
+}
+
+.result-chart {
+  display: grid;
+  gap: 11px;
+}
+
+.result-row {
+  border: 1px solid #d4e2ef;
+  border-radius: 12px;
+  background: #f9fcff;
+  padding: 10px;
+}
+
+.result-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.metric-row:last-child {
+  margin-bottom: 0;
+}
+
+.metric-row label {
+  font-size: 0.78rem;
+  color: #56708a;
+  font-weight: 700;
+}
+
+.progress-track {
+  height: 9px;
+  border-radius: 999px;
+  background: #deebf6;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.progress-fill.final {
+  background: linear-gradient(90deg, #05578f 0%, #1a86c2 100%);
+}
+
+.progress-fill.semantic {
+  background: linear-gradient(90deg, #0f8479 0%, #2ab6a2 100%);
+}
+
+.progress-fill.skills {
+  background: linear-gradient(90deg, #6b62cb 0%, #8f86ea 100%);
+}
+
+.progress-fill.readiness {
+  background: linear-gradient(90deg, #06746a 0%, #19a38d 100%);
+}
+
+.progress-fill.coverage {
+  background: linear-gradient(90deg, #1f6094 0%, #2998cb 100%);
+}
+
+.performance-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.performance-item {
+  border: 1px solid #cfe0ee;
+  border-radius: 12px;
+  background: #f8fcff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.performance-item p {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #547089;
+}
+
+.performance-item strong {
+  font-family: "Manrope", "Avenir Next", sans-serif;
+  font-size: 1.05rem;
+}
+
 @keyframes reveal-up {
   from {
     opacity: 0;
@@ -514,6 +743,20 @@ button:disabled {
 @media (max-width: 720px) {
   .row {
     grid-template-columns: 1fr;
+  }
+
+  .chart-accordion summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chart-content {
+    padding: 12px;
+  }
+
+  .metric-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .card {

@@ -148,7 +148,7 @@ async def upload_resume(
 
 @router.post("/import/gmail", response_model=GmailImportResponse)
 def import_resumes_from_gmail(
-    max_messages: int = Query(default=20, ge=1, le=100),
+    max_messages: int = Query(default=5, ge=1, le=100),
     query: str | None = Query(default=None),
     label: str | None = Query(default=None),
 ) -> GmailImportResponse:
@@ -179,7 +179,7 @@ def import_resume_from_linkedin() -> Resume:
 
 @router.post("/import/combined", response_model=CombinedImportResponse)
 def import_resumes_from_gmail_and_linkedin(
-    max_messages: int = Query(default=20, ge=1, le=100),
+    max_messages: int = Query(default=5, ge=1, le=100),
     query: str | None = Query(default=None),
     label: str | None = Query(default=None),
 ) -> CombinedImportResponse:

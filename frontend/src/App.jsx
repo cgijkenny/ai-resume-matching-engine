@@ -47,6 +47,10 @@ function readApiDetail(detail) {
 }
 
 function apiErrorMessage(error, fallback) {
+  const statusCode = Number(error?.response?.status || 0);
+  if (statusCode === 503) {
+    return "Server is temporarily busy (Render free instance). Wait 30-60 seconds and retry with max messages set to 1-3.";
+  }
   const detail = readApiDetail(error?.response?.data?.detail);
   if (detail) {
     return detail;
@@ -55,6 +59,15 @@ function apiErrorMessage(error, fallback) {
     return error.message;
   }
   return fallback;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
 }
 
 export default function App() {
@@ -85,6 +98,7 @@ export default function App() {
   const [isImportingGmail, setIsImportingGmail] = useState(false);
   const [isImportingLinkedin, setIsImportingLinkedin] = useState(false);
   const [isImportingCombined, setIsImportingCombined] = useState(false);
+  const [testScreenshots, setTestScreenshots] = useState([]);
 
   async function loadDashboard() {
     try {
@@ -336,6 +350,34 @@ export default function App() {
     }
   }
 
+  async function addTestScreenshots(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) {
+      return;
+    }
+
+    try {
+      const uploaded = await Promise.all(
+        files.map(async (file) => ({
+          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          name: file.name,
+          dataUrl: await fileToDataUrl(file)
+        }))
+      );
+      setTestScreenshots((current) => [...uploaded, ...current].slice(0, 18));
+      setStatusMessage(`${uploaded.length} screenshot(s) added to Chart section.`);
+      setErrorMessage("");
+    } catch (error) {
+      setErrorMessage(apiErrorMessage(error, "Unable to load screenshot(s)."));
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function removeTestScreenshot(id) {
+    setTestScreenshots((current) => current.filter((item) => item.id !== id));
+  }
+
   async function runMatching() {
     if (!selectedJobId) {
       setErrorMessage("Select a job first.");
@@ -355,6 +397,16 @@ export default function App() {
   const healthClass =
     health === "ok" ? "chip-ok" : health === "offline" ? "chip-offline" : "chip-pending";
   const healthLabel = typeof health === "string" ? health.toUpperCase() : String(health);
+  const rankedMatches = [...matches].sort((left, right) => right.final_score - left.final_score).slice(0, 6);
+  const averageFinalScore =
+    matches.length > 0 ? matches.reduce((sum, item) => sum + item.final_score, 0) / matches.length : 0;
+  const averageSemanticScore =
+    matches.length > 0 ? matches.reduce((sum, item) => sum + item.semantic_score, 0) / matches.length : 0;
+  const averageSkillScore =
+    matches.length > 0 ? matches.reduce((sum, item) => sum + item.skill_score, 0) / matches.length : 0;
+  const shortlistRatio =
+    resumes.length > 0 ? Math.min(1, matches.filter((item) => item.final_score >= 0.6).length / resumes.length) : 0;
+  const evaluationCoverage = resumes.length > 0 ? Math.min(1, matches.length / resumes.length) : 0;
 
   return (
     <main className="layout">
@@ -631,6 +683,140 @@ export default function App() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="card card-wide chart-card">
+        <details className="chart-accordion">
+          <summary>
+            <span className="chart-summary-title">Chart</span>
+            <span className="chart-summary-subtitle">Click to open insights and screenshots</span>
+          </summary>
+
+          <div className="chart-content">
+            <article className="chart-block">
+              <div className="chart-block-head">
+                <h3>A. Test Screenshots</h3>
+                <label className="chart-upload">
+                  Add Screenshots
+                  <input type="file" accept="image/*" multiple onChange={addTestScreenshots} />
+                </label>
+              </div>
+
+              {testScreenshots.length > 0 ? (
+                <div className="screenshot-grid">
+                  {testScreenshots.map((shot) => (
+                    <figure key={shot.id} className="screenshot-card">
+                      <img src={shot.dataUrl} alt={shot.name} loading="lazy" />
+                      <figcaption>{shot.name}</figcaption>
+                      <button
+                        type="button"
+                        className="screenshot-remove"
+                        onClick={() => removeTestScreenshot(shot.id)}
+                      >
+                        Remove
+                      </button>
+                    </figure>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">Add screenshots here to document test runs and UI validations.</p>
+              )}
+            </article>
+
+            <article className="chart-block">
+              <div className="chart-block-head">
+                <h3>B. Result Analysis Charts</h3>
+                <span className="chart-note">Based on latest matching output</span>
+              </div>
+
+              {rankedMatches.length > 0 ? (
+                <div className="result-chart">
+                  {rankedMatches.map((item) => (
+                    <div key={`analysis-${item.resume_id}`} className="result-row">
+                      <div className="result-row-head">
+                        <strong>{item.candidate_name}</strong>
+                        <span>{toPercent(item.final_score)}</span>
+                      </div>
+                      <div className="metric-row">
+                        <label>Final</label>
+                        <div className="progress-track">
+                          <div className="progress-fill final" style={{ width: toPercent(item.final_score) }} />
+                        </div>
+                      </div>
+                      <div className="metric-row">
+                        <label>Semantic</label>
+                        <div className="progress-track">
+                          <div
+                            className="progress-fill semantic"
+                            style={{ width: toPercent(item.semantic_score) }}
+                          />
+                        </div>
+                      </div>
+                      <div className="metric-row">
+                        <label>Skills</label>
+                        <div className="progress-track">
+                          <div className="progress-fill skills" style={{ width: toPercent(item.skill_score) }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted">Run matching to generate result analysis charts.</p>
+              )}
+            </article>
+
+            <article className="chart-block">
+              <div className="chart-block-head">
+                <h3>C. Performance Analysis Charts</h3>
+                <span className="chart-note">System-level screening KPIs</span>
+              </div>
+
+              <div className="performance-grid">
+                <div className="performance-item">
+                  <p>Average Final Score</p>
+                  <strong>{toPercent(averageFinalScore)}</strong>
+                  <div className="progress-track">
+                    <div className="progress-fill final" style={{ width: toPercent(averageFinalScore) }} />
+                  </div>
+                </div>
+                <div className="performance-item">
+                  <p>Average Semantic Score</p>
+                  <strong>{toPercent(averageSemanticScore)}</strong>
+                  <div className="progress-track">
+                    <div className="progress-fill semantic" style={{ width: toPercent(averageSemanticScore) }} />
+                  </div>
+                </div>
+                <div className="performance-item">
+                  <p>Average Skill Score</p>
+                  <strong>{toPercent(averageSkillScore)}</strong>
+                  <div className="progress-track">
+                    <div className="progress-fill skills" style={{ width: toPercent(averageSkillScore) }} />
+                  </div>
+                </div>
+                <div className="performance-item">
+                  <p>Shortlist Readiness (Final ≥ 60%)</p>
+                  <strong>{toPercent(shortlistRatio)}</strong>
+                  <div className="progress-track">
+                    <div className="progress-fill readiness" style={{ width: toPercent(shortlistRatio) }} />
+                  </div>
+                </div>
+                <div className="performance-item">
+                  <p>Evaluation Coverage</p>
+                  <strong>{toPercent(evaluationCoverage)}</strong>
+                  <div className="progress-track">
+                    <div className="progress-fill coverage" style={{ width: toPercent(evaluationCoverage) }} />
+                  </div>
+                </div>
+                <div className="performance-item">
+                  <p>Throughput</p>
+                  <strong>{matches.length} / {resumes.length || 0}</strong>
+                  <p className="muted">Matched candidates against available resumes.</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        </details>
       </section>
     </main>
   );

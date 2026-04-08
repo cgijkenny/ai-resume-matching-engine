@@ -221,6 +221,12 @@ class GmailResumeClient:
             parts.append(extra_query.strip())
         return " ".join(parts)
 
+    def _max_attachment_bytes(self) -> int:
+        mb = settings.gmail_max_attachment_size_mb
+        if mb <= 0:
+            mb = 1
+        return mb * 1024 * 1024
+
     def fetch_recent_resume_attachments(
         self,
         max_messages: int = 20,
@@ -243,8 +249,12 @@ class GmailResumeClient:
 
         messages = message_response.get("messages", [])
         attachments: list[GmailAttachment] = []
+        max_total_attachments = max(1, settings.gmail_max_attachments_per_import)
 
         for message in messages:
+            if len(attachments) >= max_total_attachments:
+                break
+
             message_id = message.get("id")
             if not message_id:
                 continue
@@ -266,6 +276,8 @@ class GmailResumeClient:
                 payload=payload,
             )
             for item in payload_attachments:
+                if len(attachments) >= max_total_attachments:
+                    break
                 attachments.append(
                     GmailAttachment(
                         message_id=message_id,
@@ -287,6 +299,7 @@ class GmailResumeClient:
     ) -> list[dict]:
         attachments: list[dict] = []
         stack = [payload]
+        max_attachment_bytes = self._max_attachment_bytes()
 
         while stack:
             part = stack.pop()
@@ -302,6 +315,9 @@ class GmailResumeClient:
             body = part.get("body") or {}
             data = body.get("data")
             attachment_id = body.get("attachmentId")
+            body_size = body.get("size")
+            if isinstance(body_size, int) and body_size > max_attachment_bytes:
+                continue
 
             if not data and attachment_id:
                 attachment_payload = (
@@ -316,15 +332,22 @@ class GmailResumeClient:
                     .execute()
                 )
                 data = attachment_payload.get("data")
+                attachment_size = attachment_payload.get("size")
+                if isinstance(attachment_size, int) and attachment_size > max_attachment_bytes:
+                    continue
 
             if not data:
+                continue
+
+            raw = self._decode_base64_url(data)
+            if len(raw) > max_attachment_bytes:
                 continue
 
             attachments.append(
                 {
                     "filename": filename,
                     "mime_type": mime_type,
-                    "raw_bytes": self._decode_base64_url(data),
+                    "raw_bytes": raw,
                 }
             )
 

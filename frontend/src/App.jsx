@@ -6,6 +6,16 @@ const api = axios.create({
   timeout: 60000
 });
 
+const defaultGmailStatus = {
+  connected: false,
+  configured: false,
+  ready_for_browser_oauth: false,
+  client_type: "missing",
+  callback_url: "",
+  default_label: "",
+  message: ""
+};
+
 function parseCsv(value) {
   return value
     .split(",")
@@ -74,7 +84,7 @@ export default function App() {
   const [health, setHealth] = useState("checking");
   const [jobs, setJobs] = useState([]);
   const [resumes, setResumes] = useState([]);
-  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailStatus, setGmailStatus] = useState(defaultGmailStatus);
   const [linkedinConnected, setLinkedinConnected] = useState(false);
   const [matches, setMatches] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState("");
@@ -113,14 +123,17 @@ export default function App() {
       setErrorMessage("");
       setJobs(jobsRes.data);
       setResumes(resumesRes.data);
-      setGmailConnected(Boolean(gmailStatusRes.data.connected));
+      setGmailStatus({
+        ...defaultGmailStatus,
+        ...gmailStatusRes.data
+      });
       setLinkedinConnected(Boolean(linkedinStatusRes.data.connected));
       if (!selectedJobId && jobsRes.data.length > 0) {
         setSelectedJobId(String(jobsRes.data[0].id));
       }
     } catch {
       setHealth("offline");
-      setGmailConnected(false);
+      setGmailStatus(defaultGmailStatus);
       setLinkedinConnected(false);
       setErrorMessage("Backend API is offline. Start backend server on port 8000.");
     }
@@ -178,7 +191,7 @@ export default function App() {
     setStatusMessage("");
     setErrorMessage("");
 
-    if (!gmailConnected) {
+    if (!gmailStatus.connected) {
       window.location.assign("/api/v1/gmail/oauth/start?next_provider=linkedin");
       return;
     }
@@ -313,7 +326,7 @@ export default function App() {
   }
 
   async function importFromBothSources() {
-    if (!gmailConnected || !linkedinConnected) {
+    if (!gmailStatus.connected || !linkedinConnected) {
       setErrorMessage("Connect both Gmail and LinkedIn before importing from both sources.");
       return;
     }
@@ -397,6 +410,14 @@ export default function App() {
   const healthClass =
     health === "ok" ? "chip-ok" : health === "offline" ? "chip-offline" : "chip-pending";
   const healthLabel = typeof health === "string" ? health.toUpperCase() : String(health);
+  const gmailConnected = Boolean(gmailStatus.connected);
+  const gmailReady = Boolean(gmailStatus.ready_for_browser_oauth);
+  const gmailSetupTone = gmailConnected ? "is-connected" : gmailReady ? "is-pending" : "is-disconnected";
+  const gmailSetupLabel = gmailConnected
+    ? "Connected"
+    : gmailReady
+      ? "Ready to connect"
+      : "Setup required";
   const rankedMatches = [...matches].sort((left, right) => right.final_score - left.final_score).slice(0, 6);
   const averageFinalScore =
     matches.length > 0 ? matches.reduce((sum, item) => sum + item.final_score, 0) / matches.length : 0;
@@ -448,7 +469,7 @@ export default function App() {
           <span className="card-tag">Non-Technical Flow</span>
         </div>
         <p className="quick-hint">
-          Step 1: sign in with Gmail or LinkedIn. Step 2: click import. No technical setup is needed for end users.
+          Step 1: sign in with Gmail or LinkedIn. Step 2: click import. Gmail now shows setup guidance if OAuth config is missing.
         </p>
         <div className="auth-actions">
           <button type="button" className="button-secondary" onClick={connectGmail}>
@@ -559,9 +580,27 @@ export default function App() {
             <span className="card-tag">OAuth</span>
           </div>
           <form onSubmit={importFromGmail}>
-            <p className={`connection-status ${gmailConnected ? "is-connected" : "is-disconnected"}`}>
-              Connection: <strong>{gmailConnected ? "Connected" : "Not connected"}</strong>
+            <p className={`connection-status ${gmailSetupTone}`}>
+              Gmail status: <strong>{gmailSetupLabel}</strong>
             </p>
+            <div className="setup-panel">
+              <p className="setup-message">{gmailStatus.message || "Connect Gmail to import emailed resumes."}</p>
+              {!gmailReady && (
+                <div className="setup-details">
+                  <p className="muted">
+                    Use a Google Cloud OAuth client of type <strong>Web application</strong>.
+                  </p>
+                  <p className="muted">
+                    Authorized redirect URI: <code>{gmailStatus.callback_url || "/api/v1/gmail/oauth/callback"}</code>
+                  </p>
+                </div>
+              )}
+              {gmailReady && gmailStatus.default_label && (
+                <p className="muted">
+                  Default Gmail label from backend: <strong>{gmailStatus.default_label}</strong>
+                </p>
+              )}
+            </div>
             <button type="button" className="button-secondary" onClick={connectGmail}>
               {gmailConnected ? "Sign in again with Gmail" : "Sign in with Gmail"}
             </button>

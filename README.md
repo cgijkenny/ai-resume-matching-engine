@@ -54,11 +54,13 @@ Open:
 1. In Google Cloud Console create OAuth client type `Web application`.
 2. Add authorized redirect URI:
 - `https://<your-domain>/api/v1/gmail/oauth/callback`
+- Local development: `http://localhost:8000/api/v1/gmail/oauth/callback`
 3. Set deployment secrets:
 - `GMAIL_CREDENTIALS_JSON` (full OAuth client JSON)
 - `GMAIL_CREDENTIALS_PATH=/app/oauth/credentials.json`
 - `GMAIL_TOKEN_PATH=/app/oauth/token.json`
-4. End users click `Connect Gmail` in UI and authorize from browser.
+4. Open the app and check the Gmail card. It now tells you whether credentials are missing, the OAuth client type is wrong, or browser sign-in is ready.
+5. End users click `Connect Gmail` in UI and authorize from browser.
 
 ## LinkedIn OAuth Setup (Non-Technical User Flow)
 1. Open [LinkedIn Developers](https://www.linkedin.com/developers/apps), create/select your app.
@@ -117,6 +119,7 @@ LinkedIn job-application resume retrieval is restricted to partner programs/APIs
 - `GMAIL_CREDENTIALS_JSON` = full JSON content of OAuth credentials file
 - `GMAIL_CREDENTIALS_PATH` = `/app/oauth/credentials.json`
 - `GMAIL_TOKEN_PATH` = `/app/oauth/token.json`
+- `GMAIL_TOKEN_JSON` = optional pre-seeded Gmail token JSON
 - `LINKEDIN_CLIENT_ID` = LinkedIn app client ID
 - `LINKEDIN_CLIENT_SECRET` = LinkedIn app client secret
 - `LINKEDIN_TOKEN_PATH` = `/app/oauth/linkedin_token.json`

@@ -70,6 +70,52 @@ class GmailResumeClient:
                 f"Invalid Gmail OAuth client JSON at `{credentials_path}`."
             ) from exc
 
+    def config_status(self) -> dict[str, str | bool]:
+        credentials_path = self._credentials_path()
+        if not credentials_path.exists():
+            return {
+                "configured": False,
+                "ready_for_browser_oauth": False,
+                "client_type": "missing",
+                "message": f"Missing Gmail OAuth client file at `{credentials_path}`.",
+            }
+
+        try:
+            config = self._client_config()
+        except GmailAuthRequiredError as exc:
+            return {
+                "configured": False,
+                "ready_for_browser_oauth": False,
+                "client_type": "invalid",
+                "message": str(exc),
+            }
+
+        if "web" in config:
+            return {
+                "configured": True,
+                "ready_for_browser_oauth": True,
+                "client_type": "web",
+                "message": "Gmail OAuth client is configured for browser sign-in.",
+            }
+
+        if "installed" in config:
+            return {
+                "configured": True,
+                "ready_for_browser_oauth": False,
+                "client_type": "installed",
+                "message": (
+                    "Gmail OAuth client is configured as `Desktop app`. "
+                    "Use `Web application` for browser sign-in."
+                ),
+            }
+
+        return {
+            "configured": True,
+            "ready_for_browser_oauth": False,
+            "client_type": "unknown",
+            "message": "Gmail OAuth client JSON is present but missing `web` configuration.",
+        }
+
     def _is_web_oauth_client(self) -> bool:
         config = self._client_config()
         return "web" in config
@@ -98,6 +144,7 @@ class GmailResumeClient:
                     "Could not refresh Gmail token. "
                     "Reconnect Gmail from the app."
                 ) from exc
+            token_path.parent.mkdir(parents=True, exist_ok=True)
             token_path.write_text(credentials.to_json(), encoding="utf-8")
             return credentials
 

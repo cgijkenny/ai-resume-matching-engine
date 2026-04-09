@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.services.gmail_client import GmailAuthRequiredError, gmail_resume_client
 
 
@@ -14,7 +15,7 @@ def main() -> None:
         raise SystemExit(1) from exc
 
     print("Authorization complete.")
-    print("Token saved to backend/token.json")
+    print(f"Token saved to {settings.gmail_token_path}")
 
 
 if __name__ == "__main__":

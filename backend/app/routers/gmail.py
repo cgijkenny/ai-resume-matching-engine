@@ -12,6 +12,12 @@ router = APIRouter()
 
 class GmailConnectionStatus(BaseModel):
     connected: bool
+    configured: bool
+    ready_for_browser_oauth: bool
+    client_type: str
+    callback_url: str
+    default_label: str
+    message: str
 
 
 def _app_base_url(request: Request) -> str:
@@ -23,8 +29,17 @@ def _callback_url(request: Request) -> str:
 
 
 @router.get("/status", response_model=GmailConnectionStatus)
-def gmail_status() -> GmailConnectionStatus:
-    return GmailConnectionStatus(connected=gmail_resume_client.is_connected())
+def gmail_status(request: Request) -> GmailConnectionStatus:
+    config_status = gmail_resume_client.config_status()
+    return GmailConnectionStatus(
+        connected=gmail_resume_client.is_connected(),
+        configured=bool(config_status["configured"]),
+        ready_for_browser_oauth=bool(config_status["ready_for_browser_oauth"]),
+        client_type=str(config_status["client_type"]),
+        callback_url=_callback_url(request),
+        default_label=settings.gmail_resume_label,
+        message=str(config_status["message"]),
+    )
 
 
 @router.get("/oauth/start")

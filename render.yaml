@@ -16,8 +16,12 @@ services:
         value: sentence-transformers/all-MiniLM-L6-v2
       - key: GMAIL_CREDENTIALS_PATH
         value: /app/oauth/credentials.json
+      - key: GMAIL_CREDENTIALS_JSON
+        value: ""
       - key: GMAIL_TOKEN_PATH
         value: /app/oauth/token.json
+      - key: GMAIL_TOKEN_JSON
+        value: ""
       - key: LINKEDIN_CLIENT_ID
         value: ""
       - key: LINKEDIN_CLIENT_SECRET

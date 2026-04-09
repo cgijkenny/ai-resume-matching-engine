@@ -24,7 +24,7 @@ function parseCsv(value) {
 }
 
 function toPercent(value) {
-  return `${(value * 100).toFixed(1)}%`;
+  return `${(Math.max(0, Math.min(1, Number(value) || 0)) * 100).toFixed(1)}%`;
 }
 
 function readApiDetail(detail) {
@@ -59,7 +59,7 @@ function readApiDetail(detail) {
 function apiErrorMessage(error, fallback) {
   const statusCode = Number(error?.response?.status || 0);
   if (statusCode === 503) {
-    return "Server is temporarily busy (Render free instance). Wait 30-60 seconds and retry with max messages set to 1-3.";
+    return "Server is temporarily busy. Wait 30-60 seconds, then retry with max emails set to 1-3.";
   }
   const detail = readApiDetail(error?.response?.data?.detail);
   if (detail) {
@@ -71,13 +71,14 @@ function apiErrorMessage(error, fallback) {
   return fallback;
 }
 
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-    reader.readAsDataURL(file);
-  });
+function scoreBand(score) {
+  if (score >= 0.75) {
+    return "Shortlist";
+  }
+  if (score >= 0.5) {
+    return "Review";
+  }
+  return "Low Fit";
 }
 
 export default function App() {
@@ -95,10 +96,6 @@ export default function App() {
   const [jobDescription, setJobDescription] = useState("");
   const [jobSkills, setJobSkills] = useState("");
 
-  const [resumeName, setResumeName] = useState("");
-  const [resumeText, setResumeText] = useState("");
-  const [resumeSkills, setResumeSkills] = useState("");
-
   const [uploadName, setUploadName] = useState("");
   const [uploadSkills, setUploadSkills] = useState("");
   const [uploadFile, setUploadFile] = useState(null);
@@ -108,7 +105,7 @@ export default function App() {
   const [isImportingGmail, setIsImportingGmail] = useState(false);
   const [isImportingLinkedin, setIsImportingLinkedin] = useState(false);
   const [isImportingCombined, setIsImportingCombined] = useState(false);
-  const [testScreenshots, setTestScreenshots] = useState([]);
+  const [isRunningMatch, setIsRunningMatch] = useState(false);
 
   async function loadDashboard() {
     try {
@@ -119,8 +116,8 @@ export default function App() {
         api.get("/api/v1/gmail/status"),
         api.get("/api/v1/linkedin/status")
       ]);
+
       setHealth(healthRes.data.status);
-      setErrorMessage("");
       setJobs(jobsRes.data);
       setResumes(resumesRes.data);
       setGmailStatus({
@@ -128,6 +125,7 @@ export default function App() {
         ...gmailStatusRes.data
       });
       setLinkedinConnected(Boolean(linkedinStatusRes.data.connected));
+
       if (!selectedJobId && jobsRes.data.length > 0) {
         setSelectedJobId(String(jobsRes.data[0].id));
       }
@@ -135,7 +133,7 @@ export default function App() {
       setHealth("offline");
       setGmailStatus(defaultGmailStatus);
       setLinkedinConnected(false);
-      setErrorMessage("Backend API is offline. Start backend server on port 8000.");
+      setErrorMessage("Backend API is offline. Start the backend server on port 8000.");
     }
   }
 
@@ -150,7 +148,7 @@ export default function App() {
     const message = params.get("message");
 
     if (gmailAuth === "connected") {
-      setStatusMessage("Gmail sign-in successful. You can now import resumes.");
+      setStatusMessage("Gmail connected successfully. You can now import resumes.");
       setErrorMessage("");
       loadDashboard();
     } else if (gmailAuth === "error") {
@@ -158,7 +156,7 @@ export default function App() {
     }
 
     if (linkedinAuth === "connected") {
-      setStatusMessage("LinkedIn sign-in successful. You can now import profile.");
+      setStatusMessage("LinkedIn connected successfully. You can now import profile data.");
       setErrorMessage("");
       loadDashboard();
     } else if (linkedinAuth === "error") {
@@ -206,6 +204,7 @@ export default function App() {
     event.preventDefault();
     setErrorMessage("");
     setStatusMessage("");
+
     try {
       const response = await api.post("/api/v1/jobs", {
         title: jobTitle,
@@ -218,29 +217,9 @@ export default function App() {
       setJobTitle("");
       setJobDescription("");
       setJobSkills("");
-      setStatusMessage("Job created.");
+      setStatusMessage("Job profile created successfully.");
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Failed to create job."));
-    }
-  }
-
-  async function createResume(event) {
-    event.preventDefault();
-    setErrorMessage("");
-    setStatusMessage("");
-    try {
-      const response = await api.post("/api/v1/resumes", {
-        candidate_name: resumeName,
-        text: resumeText,
-        skills: parseCsv(resumeSkills)
-      });
-      setResumes((current) => [...current, response.data]);
-      setResumeName("");
-      setResumeText("");
-      setResumeSkills("");
-      setStatusMessage("Resume added.");
-    } catch (error) {
-      setErrorMessage(apiErrorMessage(error, "Failed to add resume."));
     }
   }
 
@@ -253,6 +232,7 @@ export default function App() {
 
     setErrorMessage("");
     setStatusMessage("");
+
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
@@ -266,11 +246,12 @@ export default function App() {
       const response = await api.post("/api/v1/resumes/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
+
       setResumes((current) => [...current, response.data]);
       setUploadFile(null);
       setUploadName("");
       setUploadSkills("");
-      setStatusMessage("Resume file uploaded.");
+      setStatusMessage("Resume uploaded successfully.");
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Failed to upload file."));
     }
@@ -281,7 +262,9 @@ export default function App() {
     setErrorMessage("");
     setStatusMessage("");
     setIsImportingGmail(true);
+
     const requestedMax = Math.min(100, Math.max(1, Number(gmailMaxMessages) || 5));
+
     try {
       const response = await api.post("/api/v1/resumes/import/gmail", null, {
         params: {
@@ -293,11 +276,9 @@ export default function App() {
       const data = response.data;
       setResumes((current) => [...current, ...data.resumes]);
       if (data.imported_count === 0 && data.skipped_count === 0 && (!data.errors || data.errors.length === 0)) {
-        setStatusMessage("No resume attachments found in Gmail for the current filter.");
+        setStatusMessage("No resume attachments found for the current Gmail filters.");
       } else {
-        setStatusMessage(
-          `Gmail import completed. Added ${data.imported_count}, skipped ${data.skipped_count}.`
-        );
+        setStatusMessage(`Gmail import finished. Added ${data.imported_count} and skipped ${data.skipped_count}.`);
       }
       if (data.errors?.length) {
         setErrorMessage(data.errors[0]);
@@ -309,15 +290,15 @@ export default function App() {
     }
   }
 
-  async function importFromLinkedin(event) {
-    event.preventDefault();
+  async function importFromLinkedin() {
     setErrorMessage("");
     setStatusMessage("");
     setIsImportingLinkedin(true);
+
     try {
       const response = await api.post("/api/v1/resumes/import/linkedin");
       setResumes((current) => [...current, response.data]);
-      setStatusMessage("LinkedIn profile imported as resume.");
+      setStatusMessage("LinkedIn profile imported successfully.");
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "LinkedIn import failed."));
     } finally {
@@ -327,7 +308,7 @@ export default function App() {
 
   async function importFromBothSources() {
     if (!gmailStatus.connected || !linkedinConnected) {
-      setErrorMessage("Connect both Gmail and LinkedIn before importing from both sources.");
+      setErrorMessage("Connect both Gmail and LinkedIn before running combined import.");
       return;
     }
 
@@ -336,6 +317,7 @@ export default function App() {
     setIsImportingCombined(true);
 
     const requestedMax = Math.min(100, Math.max(1, Number(gmailMaxMessages) || 5));
+
     try {
       const response = await api.post("/api/v1/resumes/import/combined", null, {
         params: {
@@ -346,15 +328,14 @@ export default function App() {
       });
       const data = response.data;
       setResumes((current) => [...current, ...data.resumes]);
+
+      const warnings = Array.isArray(data.warnings) && data.warnings.length > 0 ? ` ${data.warnings[0]}` : "";
       setStatusMessage(
-        `Combined import completed. Gmail added ${data.gmail_imported_count}, LinkedIn added ${data.linkedin_imported_count}.`
+        `Combined import finished. Gmail added ${data.gmail_imported_count}, LinkedIn added ${data.linkedin_imported_count}.${warnings}`
       );
+
       if (Array.isArray(data.errors) && data.errors.length > 0) {
         setErrorMessage(data.errors[0]);
-      } else if (Array.isArray(data.warnings) && data.warnings.length > 0) {
-        setStatusMessage(
-          `Combined import completed. Gmail added ${data.gmail_imported_count}, LinkedIn added ${data.linkedin_imported_count}. ${data.warnings[0]}`
-        );
       }
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Combined import failed."));
@@ -363,95 +344,102 @@ export default function App() {
     }
   }
 
-  async function addTestScreenshots(event) {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) {
-      return;
-    }
-
-    try {
-      const uploaded = await Promise.all(
-        files.map(async (file) => ({
-          id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-          name: file.name,
-          dataUrl: await fileToDataUrl(file)
-        }))
-      );
-      setTestScreenshots((current) => [...uploaded, ...current].slice(0, 18));
-      setStatusMessage(`${uploaded.length} screenshot(s) added to Chart section.`);
-      setErrorMessage("");
-    } catch (error) {
-      setErrorMessage(apiErrorMessage(error, "Unable to load screenshot(s)."));
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  function removeTestScreenshot(id) {
-    setTestScreenshots((current) => current.filter((item) => item.id !== id));
-  }
-
   async function runMatching() {
     if (!selectedJobId) {
-      setErrorMessage("Select a job first.");
+      setErrorMessage("Create or select a job first.");
       return;
     }
+
     setErrorMessage("");
     setStatusMessage("");
+    setIsRunningMatch(true);
+
     try {
       const response = await api.post(`/api/v1/resumes/match/${selectedJobId}`);
       setMatches(response.data);
-      setStatusMessage("Matching completed.");
+      setStatusMessage("Candidate screening completed.");
     } catch (error) {
       setErrorMessage(apiErrorMessage(error, "Matching failed."));
+    } finally {
+      setIsRunningMatch(false);
     }
   }
 
+  const gmailConnected = Boolean(gmailStatus.connected);
+  const gmailReady = Boolean(gmailStatus.ready_for_browser_oauth);
   const healthClass =
     health === "ok" ? "chip-ok" : health === "offline" ? "chip-offline" : "chip-pending";
   const healthLabel = typeof health === "string" ? health.toUpperCase() : String(health);
-  const gmailConnected = Boolean(gmailStatus.connected);
-  const gmailReady = Boolean(gmailStatus.ready_for_browser_oauth);
   const gmailSetupTone = gmailConnected ? "is-connected" : gmailReady ? "is-pending" : "is-disconnected";
   const gmailSetupLabel = gmailConnected
     ? "Connected"
     : gmailReady
       ? "Ready to connect"
       : "Setup required";
-  const rankedMatches = [...matches].sort((left, right) => right.final_score - left.final_score).slice(0, 6);
+
+  const selectedJob = jobs.find((job) => String(job.id) === String(selectedJobId)) || null;
+  const rankedMatches = [...matches].sort((left, right) => right.final_score - left.final_score);
+  const topCandidates = rankedMatches.slice(0, 5);
   const averageFinalScore =
-    matches.length > 0 ? matches.reduce((sum, item) => sum + item.final_score, 0) / matches.length : 0;
+    rankedMatches.length > 0 ? rankedMatches.reduce((sum, item) => sum + item.final_score, 0) / rankedMatches.length : 0;
   const averageSemanticScore =
-    matches.length > 0 ? matches.reduce((sum, item) => sum + item.semantic_score, 0) / matches.length : 0;
+    rankedMatches.length > 0 ? rankedMatches.reduce((sum, item) => sum + item.semantic_score, 0) / rankedMatches.length : 0;
   const averageSkillScore =
-    matches.length > 0 ? matches.reduce((sum, item) => sum + item.skill_score, 0) / matches.length : 0;
-  const shortlistRatio =
-    resumes.length > 0 ? Math.min(1, matches.filter((item) => item.final_score >= 0.6).length / resumes.length) : 0;
-  const evaluationCoverage = resumes.length > 0 ? Math.min(1, matches.length / resumes.length) : 0;
+    rankedMatches.length > 0 ? rankedMatches.reduce((sum, item) => sum + item.skill_score, 0) / rankedMatches.length : 0;
+
+  const shortlistCount = rankedMatches.filter((item) => item.final_score >= 0.75).length;
+  const reviewCount = rankedMatches.filter((item) => item.final_score >= 0.5 && item.final_score < 0.75).length;
+  const lowFitCount = rankedMatches.filter((item) => item.final_score < 0.5).length;
+  const evaluatedCount = rankedMatches.length;
+  const totalForChart = Math.max(1, evaluatedCount);
+
+  const shortlistPercent = (shortlistCount / totalForChart) * 100;
+  const reviewPercent = (reviewCount / totalForChart) * 100;
+  const lowFitPercent = (lowFitCount / totalForChart) * 100;
+  const sourceCompletion = resumes.length > 0 ? Math.min(1, evaluatedCount / resumes.length) : 0;
+
+  const missingSkillMap = rankedMatches.reduce((acc, item) => {
+    item.missing_skills.forEach((skill) => {
+      acc[skill] = (acc[skill] || 0) + 1;
+    });
+    return acc;
+  }, {});
+
+  const topSkillGaps = Object.entries(missingSkillMap)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 5);
+
+  const donutStyle = {
+    background: `conic-gradient(
+      #0a6cad 0% ${shortlistPercent}%,
+      #21a28c ${shortlistPercent}% ${shortlistPercent + reviewPercent}%,
+      #d7e4ef ${shortlistPercent + reviewPercent}% 100%
+    )`
+  };
 
   return (
     <main className="layout">
       <header className="hero">
-        <p className="hero-topline">Recruitment Intelligence Suite</p>
+        <p className="hero-topline">AI-Powered HR Screening Dashboard</p>
         <h1>One Stop Resume Engine</h1>
         <p className="hero-subtitle">
-          Import resumes from Gmail, LinkedIn, or files, extract skills, and rank candidates by fit.
+          Screen candidates from Gmail, LinkedIn, and uploaded resumes in one simple workflow for HR teams.
         </p>
         <div className="hero-metrics">
           <p className={`metric-chip ${healthClass}`}>
             API <strong>{healthLabel}</strong>
           </p>
           <p className="metric-chip">
-            Jobs <strong>{jobs.length}</strong>
+            Active Jobs <strong>{jobs.length}</strong>
           </p>
           <p className="metric-chip">
-            Resumes <strong>{resumes.length}</strong>
+            Candidate Pool <strong>{resumes.length}</strong>
           </p>
           <p className={`metric-chip ${gmailConnected ? "chip-ok" : "chip-pending"}`}>
-            Gmail <strong>{gmailConnected ? "CONNECTED" : "NOT CONNECTED"}</strong>
+            Gmail <strong>{gmailConnected ? "CONNECTED" : "PENDING"}</strong>
           </p>
           <p className={`metric-chip ${linkedinConnected ? "chip-ok" : "chip-pending"}`}>
-            LinkedIn <strong>{linkedinConnected ? "CONNECTED" : "NOT CONNECTED"}</strong>
+            LinkedIn <strong>{linkedinConnected ? "CONNECTED" : "PENDING"}</strong>
           </p>
         </div>
       </header>
@@ -463,32 +451,130 @@ export default function App() {
         </section>
       )}
 
-      <section className="card auth-quick">
-        <div className="card-head">
-          <h2>Quick Sign-In</h2>
-          <span className="card-tag">Non-Technical Flow</span>
-        </div>
-        <p className="quick-hint">
-          Step 1: sign in with Gmail or LinkedIn. Step 2: click import. Gmail now shows setup guidance if OAuth config is missing.
-        </p>
-        <div className="auth-actions">
-          <button type="button" className="button-secondary" onClick={connectGmail}>
-            {gmailConnected ? "Signed in to Gmail" : "Sign in with Gmail"}
-          </button>
-          <button type="button" className="button-linkedin" onClick={connectLinkedin}>
-            {linkedinConnected ? "Signed in to LinkedIn" : "Sign in with LinkedIn"}
-          </button>
+      <section className="workflow-strip">
+        <article className="workflow-step">
+          <span>1</span>
+          <div>
+            <strong>Connect Sources</strong>
+            <p>Connect Gmail and LinkedIn once for the HR user.</p>
+          </div>
+        </article>
+        <article className="workflow-step">
+          <span>2</span>
+          <div>
+            <strong>Import Candidate Resumes</strong>
+            <p>Pull resumes from portals and email attachments into one dashboard.</p>
+          </div>
+        </article>
+        <article className="workflow-step">
+          <span>3</span>
+          <div>
+            <strong>Run AI Screening</strong>
+            <p>Generate ranked candidates, graphs, and shortlist insights instantly.</p>
+          </div>
+        </article>
+      </section>
+
+      <section className="grid dashboard-grid">
+        <article className="card">
+          <div className="card-head">
+            <h2>Source Connections</h2>
+            <span className="card-tag">HR Ready</span>
+          </div>
+          <div className="source-stack">
+            <div className="source-box">
+              <p className={`connection-status ${gmailSetupTone}`}>
+                Gmail: <strong>{gmailSetupLabel}</strong>
+              </p>
+              <p className="source-copy">{gmailStatus.message || "Connect Gmail to import email attachments."}</p>
+              {!gmailReady && (
+                <p className="muted">
+                  Redirect URI: <code>{gmailStatus.callback_url || "/api/v1/gmail/oauth/callback"}</code>
+                </p>
+              )}
+              <button type="button" className="button-secondary" onClick={connectGmail}>
+                {gmailConnected ? "Reconnect Gmail" : "Connect Gmail"}
+              </button>
+            </div>
+
+            <div className="source-box">
+              <p className={`connection-status ${linkedinConnected ? "is-connected" : "is-disconnected"}`}>
+                LinkedIn: <strong>{linkedinConnected ? "Connected" : "Not connected"}</strong>
+              </p>
+              <p className="source-copy">Import LinkedIn profile data without leaving the dashboard.</p>
+              <button type="button" className="button-linkedin" onClick={connectLinkedin}>
+                {linkedinConnected ? "Reconnect LinkedIn" : "Connect LinkedIn"}
+              </button>
+            </div>
+          </div>
+
           <button type="button" onClick={connectBothAccounts}>
             Connect Both Accounts
           </button>
-        </div>
-      </section>
+        </article>
 
-      <section className="grid">
         <article className="card">
           <div className="card-head">
-            <h2>Create Job</h2>
-            <span className="card-tag">Role Setup</span>
+            <h2>Candidate Import</h2>
+            <span className="card-tag">Naukri / Gmail / LinkedIn</span>
+          </div>
+          <form onSubmit={importFromGmail}>
+            <button type="submit" disabled={isImportingGmail || !gmailConnected}>
+              {isImportingGmail ? "Importing from Gmail..." : "Import from Gmail"}
+            </button>
+            <button
+              type="button"
+              onClick={importFromLinkedin}
+              className="button-linkedin"
+              disabled={isImportingLinkedin || !linkedinConnected}
+            >
+              {isImportingLinkedin ? "Importing LinkedIn..." : "Import from LinkedIn"}
+            </button>
+            <button
+              type="button"
+              onClick={importFromBothSources}
+              disabled={isImportingCombined || !gmailConnected || !linkedinConnected}
+            >
+              {isImportingCombined ? "Importing All Sources..." : "Import All Connected Sources"}
+            </button>
+
+            <details className="advanced-options">
+              <summary>Email filters (optional)</summary>
+              <div className="advanced-grid">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={gmailMaxMessages}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setGmailMaxMessages(Number.isNaN(value) ? 5 : value);
+                  }}
+                  placeholder="Max emails to scan"
+                />
+                <input
+                  value={gmailLabel}
+                  onChange={(event) => setGmailLabel(event.target.value)}
+                  placeholder="Gmail label"
+                />
+                <input
+                  value={gmailQuery}
+                  onChange={(event) => setGmailQuery(event.target.value)}
+                  placeholder="Extra Gmail search query"
+                />
+              </div>
+            </details>
+
+            <button type="button" className="button-ghost" onClick={loadDashboard}>
+              Refresh Dashboard
+            </button>
+          </form>
+        </article>
+
+        <article className="card">
+          <div className="card-head">
+            <h2>Create Job Role</h2>
+            <span className="card-tag">For Screening</span>
           </div>
           <form onSubmit={createJob}>
             <input
@@ -508,7 +594,7 @@ export default function App() {
               onChange={(event) => setJobSkills(event.target.value)}
               placeholder="Required skills (comma-separated)"
             />
-            <button type="submit">Save Job</button>
+            <button type="submit">Create Job</button>
           </form>
           <ul className="job-list">
             {jobs.map((job) => (
@@ -516,41 +602,14 @@ export default function App() {
                 <strong>{job.title}</strong>
               </li>
             ))}
-            {jobs.length === 0 && <li className="muted">No jobs created yet.</li>}
+            {jobs.length === 0 && <li className="muted">No job roles created yet.</li>}
           </ul>
         </article>
 
         <article className="card">
           <div className="card-head">
-            <h2>Add Resume Text</h2>
-            <span className="card-tag">Manual Entry</span>
-          </div>
-          <form onSubmit={createResume}>
-            <input
-              value={resumeName}
-              onChange={(event) => setResumeName(event.target.value)}
-              placeholder="Candidate name"
-              required
-            />
-            <textarea
-              value={resumeText}
-              onChange={(event) => setResumeText(event.target.value)}
-              placeholder="Resume text"
-              required
-            />
-            <input
-              value={resumeSkills}
-              onChange={(event) => setResumeSkills(event.target.value)}
-              placeholder="Candidate skills (comma-separated)"
-            />
-            <button type="submit">Save Resume</button>
-          </form>
-        </article>
-
-        <article className="card">
-          <div className="card-head">
-            <h2>Upload Resume File</h2>
-            <span className="card-tag">PDF / DOCX / TXT</span>
+            <h2>Upload Resume</h2>
+            <span className="card-tag">Fallback Option</span>
           </div>
           <form onSubmit={uploadResume}>
             <input
@@ -569,117 +628,21 @@ export default function App() {
               onChange={(event) => setUploadFile(event.target.files?.[0] || null)}
               required
             />
-            <button type="submit">Upload</button>
+            <button type="submit">Upload Resume</button>
           </form>
-          <p className="muted">Total resumes: {resumes.length}</p>
-        </article>
-
-        <article className="card">
-          <div className="card-head">
-            <h2>Import from Gmail</h2>
-            <span className="card-tag">OAuth</span>
-          </div>
-          <form onSubmit={importFromGmail}>
-            <p className={`connection-status ${gmailSetupTone}`}>
-              Gmail status: <strong>{gmailSetupLabel}</strong>
-            </p>
-            <div className="setup-panel">
-              <p className="setup-message">{gmailStatus.message || "Connect Gmail to import emailed resumes."}</p>
-              {!gmailReady && (
-                <div className="setup-details">
-                  <p className="muted">
-                    Use a Google Cloud OAuth client of type <strong>Web application</strong>.
-                  </p>
-                  <p className="muted">
-                    Authorized redirect URI: <code>{gmailStatus.callback_url || "/api/v1/gmail/oauth/callback"}</code>
-                  </p>
-                </div>
-              )}
-              {gmailReady && gmailStatus.default_label && (
-                <p className="muted">
-                  Default Gmail label from backend: <strong>{gmailStatus.default_label}</strong>
-                </p>
-              )}
-            </div>
-            <button type="button" className="button-secondary" onClick={connectGmail}>
-              {gmailConnected ? "Sign in again with Gmail" : "Sign in with Gmail"}
-            </button>
-            <button type="submit" disabled={isImportingGmail || !gmailConnected}>
-              {isImportingGmail ? "Importing..." : "Import Resumes"}
-            </button>
-            <button
-              type="button"
-              onClick={importFromBothSources}
-              disabled={isImportingCombined || !gmailConnected || !linkedinConnected}
-            >
-              {isImportingCombined ? "Importing Both..." : "Import Gmail + LinkedIn"}
-            </button>
-            <details className="advanced-options">
-              <summary>Advanced filters (optional)</summary>
-              <div className="advanced-grid">
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={gmailMaxMessages}
-                  onChange={(event) => {
-                    const value = Number(event.target.value);
-                    setGmailMaxMessages(Number.isNaN(value) ? 5 : value);
-                  }}
-                  placeholder="Max emails to scan"
-                />
-                <input
-                  value={gmailLabel}
-                  onChange={(event) => setGmailLabel(event.target.value)}
-                  placeholder="Gmail label (optional)"
-                />
-                <input
-                  value={gmailQuery}
-                  onChange={(event) => setGmailQuery(event.target.value)}
-                  placeholder="Extra Gmail query (optional)"
-                />
-              </div>
-            </details>
-            <button type="button" className="button-ghost" onClick={loadDashboard}>
-              Refresh API Status
-            </button>
-          </form>
-          {isImportingGmail && <p className="muted">Import in progress...</p>}
-        </article>
-
-        <article className="card">
-          <div className="card-head">
-            <h2>Import from LinkedIn</h2>
-            <span className="card-tag">OAuth</span>
-          </div>
-          <form onSubmit={importFromLinkedin}>
-            <p className={`connection-status ${linkedinConnected ? "is-connected" : "is-disconnected"}`}>
-              Connection: <strong>{linkedinConnected ? "Connected" : "Not connected"}</strong>
-            </p>
-            <button type="button" className="button-linkedin" onClick={connectLinkedin}>
-              {linkedinConnected ? "Sign in again with LinkedIn" : "Sign in with LinkedIn"}
-            </button>
-            <button type="submit" disabled={isImportingLinkedin || !linkedinConnected}>
-              {isImportingLinkedin ? "Importing..." : "Import LinkedIn Profile"}
-            </button>
-          </form>
-          <p className="muted">
-            Imports your LinkedIn profile basics as one resume entry.
-          </p>
+          <p className="muted">Use this when a resume is shared manually outside the connected sources.</p>
         </article>
       </section>
 
-      <section className="card card-wide">
+      <section className="card card-wide screening-card">
         <div className="card-head">
-          <h2>Match Resumes to Job</h2>
-          <span className="card-tag">Ranking</span>
+          <h2>Screening Control Center</h2>
+          <span className="card-tag">Final Demo</span>
         </div>
-        <div className="row">
-          <select
-            value={selectedJobId}
-            onChange={(event) => setSelectedJobId(event.target.value)}
-          >
-            <option value="">Select job</option>
+
+        <div className="screening-toolbar">
+          <select value={selectedJobId} onChange={(event) => setSelectedJobId(event.target.value)}>
+            <option value="">Select job role</option>
             {jobs.map((job) => (
               <option key={job.id} value={job.id}>
                 {job.title}
@@ -687,175 +650,195 @@ export default function App() {
             ))}
           </select>
           <button type="button" onClick={runMatching}>
-            Run Matching
+            {isRunningMatch ? "Running Screening..." : "Run AI Screening"}
           </button>
+        </div>
+
+        <div className="summary-grid">
+          <article className="summary-card">
+            <p>Selected Role</p>
+            <strong>{selectedJob?.title || "No role selected"}</strong>
+          </article>
+          <article className="summary-card">
+            <p>Candidates Evaluated</p>
+            <strong>{evaluatedCount}</strong>
+          </article>
+          <article className="summary-card">
+            <p>Shortlisted</p>
+            <strong>{shortlistCount}</strong>
+          </article>
+          <article className="summary-card">
+            <p>Average Match Score</p>
+            <strong>{toPercent(averageFinalScore)}</strong>
+          </article>
+        </div>
+
+        <div className="analytics-grid">
+          <article className="insight-card">
+            <div className="insight-head">
+              <h3>Candidate Fit Distribution</h3>
+              <span>Graph</span>
+            </div>
+            {evaluatedCount > 0 ? (
+              <div className="distribution-layout">
+                <div className="donut-chart" style={donutStyle}>
+                  <div className="donut-hole">
+                    <strong>{evaluatedCount}</strong>
+                    <span>screened</span>
+                  </div>
+                </div>
+                <div className="legend-list">
+                  <div className="legend-item">
+                    <span className="legend-dot dot-shortlist" />
+                    <p>Shortlist</p>
+                    <strong>{shortlistCount}</strong>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-dot dot-review" />
+                    <p>Review</p>
+                    <strong>{reviewCount}</strong>
+                  </div>
+                  <div className="legend-item">
+                    <span className="legend-dot dot-lowfit" />
+                    <p>Low Fit</p>
+                    <strong>{lowFitCount}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="muted">Run AI screening to generate the fit distribution graph.</p>
+            )}
+          </article>
+
+          <article className="insight-card">
+            <div className="insight-head">
+              <h3>Top Candidate Scores</h3>
+              <span>Bar Graph</span>
+            </div>
+            {topCandidates.length > 0 ? (
+              <div className="bar-chart">
+                {topCandidates.map((candidate) => (
+                  <div key={candidate.resume_id} className="bar-row">
+                    <div className="bar-row-head">
+                      <p>{candidate.candidate_name}</p>
+                      <strong>{toPercent(candidate.final_score)}</strong>
+                    </div>
+                    <div className="progress-track tall">
+                      <div className="progress-fill final" style={{ width: toPercent(candidate.final_score) }} />
+                    </div>
+                    <p className="bar-caption">{scoreBand(candidate.final_score)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Candidate score graph will appear after screening.</p>
+            )}
+          </article>
+
+          <article className="insight-card">
+            <div className="insight-head">
+              <h3>Screening KPIs</h3>
+              <span>Performance</span>
+            </div>
+            <div className="kpi-stack">
+              <div className="kpi-line">
+                <label>Average Final Score</label>
+                <strong>{toPercent(averageFinalScore)}</strong>
+                <div className="progress-track">
+                  <div className="progress-fill final" style={{ width: toPercent(averageFinalScore) }} />
+                </div>
+              </div>
+              <div className="kpi-line">
+                <label>Semantic Match</label>
+                <strong>{toPercent(averageSemanticScore)}</strong>
+                <div className="progress-track">
+                  <div className="progress-fill semantic" style={{ width: toPercent(averageSemanticScore) }} />
+                </div>
+              </div>
+              <div className="kpi-line">
+                <label>Skill Match</label>
+                <strong>{toPercent(averageSkillScore)}</strong>
+                <div className="progress-track">
+                  <div className="progress-fill skills" style={{ width: toPercent(averageSkillScore) }} />
+                </div>
+              </div>
+              <div className="kpi-line">
+                <label>Coverage</label>
+                <strong>{toPercent(sourceCompletion)}</strong>
+                <div className="progress-track">
+                  <div className="progress-fill coverage" style={{ width: toPercent(sourceCompletion) }} />
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="insight-card">
+            <div className="insight-head">
+              <h3>Top Missing Skills</h3>
+              <span>Gap Analysis</span>
+            </div>
+            {topSkillGaps.length > 0 ? (
+              <div className="gap-list">
+                {topSkillGaps.map(([skill, count]) => (
+                  <div key={skill} className="gap-row">
+                    <div className="gap-row-head">
+                      <p>{skill}</p>
+                      <strong>{count}</strong>
+                    </div>
+                    <div className="progress-track">
+                      <div
+                        className="progress-fill readiness"
+                        style={{ width: `${Math.max(18, (count / evaluatedCount) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Missing skill analysis will appear after screening.</p>
+            )}
+          </article>
         </div>
 
         <div className="table-wrap">
           <table className="match-table">
             <thead>
               <tr>
+                <th>Rank</th>
                 <th>Candidate</th>
-                <th>Final</th>
+                <th>Status</th>
+                <th>Final Score</th>
                 <th>Semantic</th>
                 <th>Skills</th>
                 <th>Missing Skills</th>
               </tr>
             </thead>
             <tbody>
-              {matches.map((result) => (
+              {rankedMatches.map((result, index) => (
                 <tr key={result.resume_id}>
+                  <td>#{index + 1}</td>
                   <td>{result.candidate_name}</td>
+                  <td>
+                    <span className={`result-badge badge-${scoreBand(result.final_score).toLowerCase().replace(" ", "")}`}>
+                      {scoreBand(result.final_score)}
+                    </span>
+                  </td>
                   <td className="score">{toPercent(result.final_score)}</td>
                   <td>{toPercent(result.semantic_score)}</td>
                   <td>{toPercent(result.skill_score)}</td>
                   <td>{result.missing_skills.join(", ") || "-"}</td>
                 </tr>
               ))}
-              {matches.length === 0 && (
+              {rankedMatches.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="muted">
-                    No matching results yet.
+                  <td colSpan="7" className="muted table-empty">
+                    No screening results yet. Create a job, import candidates, then run AI screening.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
-      </section>
-
-      <section className="card card-wide chart-card">
-        <details className="chart-accordion">
-          <summary>
-            <span className="chart-summary-title">Chart</span>
-            <span className="chart-summary-subtitle">Click to open insights and screenshots</span>
-          </summary>
-
-          <div className="chart-content">
-            <article className="chart-block">
-              <div className="chart-block-head">
-                <h3>A. Test Screenshots</h3>
-                <label className="chart-upload">
-                  Add Screenshots
-                  <input type="file" accept="image/*" multiple onChange={addTestScreenshots} />
-                </label>
-              </div>
-
-              {testScreenshots.length > 0 ? (
-                <div className="screenshot-grid">
-                  {testScreenshots.map((shot) => (
-                    <figure key={shot.id} className="screenshot-card">
-                      <img src={shot.dataUrl} alt={shot.name} loading="lazy" />
-                      <figcaption>{shot.name}</figcaption>
-                      <button
-                        type="button"
-                        className="screenshot-remove"
-                        onClick={() => removeTestScreenshot(shot.id)}
-                      >
-                        Remove
-                      </button>
-                    </figure>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted">Add screenshots here to document test runs and UI validations.</p>
-              )}
-            </article>
-
-            <article className="chart-block">
-              <div className="chart-block-head">
-                <h3>B. Result Analysis Charts</h3>
-                <span className="chart-note">Based on latest matching output</span>
-              </div>
-
-              {rankedMatches.length > 0 ? (
-                <div className="result-chart">
-                  {rankedMatches.map((item) => (
-                    <div key={`analysis-${item.resume_id}`} className="result-row">
-                      <div className="result-row-head">
-                        <strong>{item.candidate_name}</strong>
-                        <span>{toPercent(item.final_score)}</span>
-                      </div>
-                      <div className="metric-row">
-                        <label>Final</label>
-                        <div className="progress-track">
-                          <div className="progress-fill final" style={{ width: toPercent(item.final_score) }} />
-                        </div>
-                      </div>
-                      <div className="metric-row">
-                        <label>Semantic</label>
-                        <div className="progress-track">
-                          <div
-                            className="progress-fill semantic"
-                            style={{ width: toPercent(item.semantic_score) }}
-                          />
-                        </div>
-                      </div>
-                      <div className="metric-row">
-                        <label>Skills</label>
-                        <div className="progress-track">
-                          <div className="progress-fill skills" style={{ width: toPercent(item.skill_score) }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="muted">Run matching to generate result analysis charts.</p>
-              )}
-            </article>
-
-            <article className="chart-block">
-              <div className="chart-block-head">
-                <h3>C. Performance Analysis Charts</h3>
-                <span className="chart-note">System-level screening KPIs</span>
-              </div>
-
-              <div className="performance-grid">
-                <div className="performance-item">
-                  <p>Average Final Score</p>
-                  <strong>{toPercent(averageFinalScore)}</strong>
-                  <div className="progress-track">
-                    <div className="progress-fill final" style={{ width: toPercent(averageFinalScore) }} />
-                  </div>
-                </div>
-                <div className="performance-item">
-                  <p>Average Semantic Score</p>
-                  <strong>{toPercent(averageSemanticScore)}</strong>
-                  <div className="progress-track">
-                    <div className="progress-fill semantic" style={{ width: toPercent(averageSemanticScore) }} />
-                  </div>
-                </div>
-                <div className="performance-item">
-                  <p>Average Skill Score</p>
-                  <strong>{toPercent(averageSkillScore)}</strong>
-                  <div className="progress-track">
-                    <div className="progress-fill skills" style={{ width: toPercent(averageSkillScore) }} />
-                  </div>
-                </div>
-                <div className="performance-item">
-                  <p>Shortlist Readiness (Final ≥ 60%)</p>
-                  <strong>{toPercent(shortlistRatio)}</strong>
-                  <div className="progress-track">
-                    <div className="progress-fill readiness" style={{ width: toPercent(shortlistRatio) }} />
-                  </div>
-                </div>
-                <div className="performance-item">
-                  <p>Evaluation Coverage</p>
-                  <strong>{toPercent(evaluationCoverage)}</strong>
-                  <div className="progress-track">
-                    <div className="progress-fill coverage" style={{ width: toPercent(evaluationCoverage) }} />
-                  </div>
-                </div>
-                <div className="performance-item">
-                  <p>Throughput</p>
-                  <strong>{matches.length} / {resumes.length || 0}</strong>
-                  <p className="muted">Matched candidates against available resumes.</p>
-                </div>
-              </div>
-            </article>
-          </div>
-        </details>
       </section>
     </main>
   );

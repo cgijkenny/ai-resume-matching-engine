@@ -62,17 +62,15 @@ def _import_from_gmail_attachments(
     query: str | None,
     label: str | None,
 ) -> GmailImportResponse:
-    attachments = gmail_resume_client.fetch_recent_resume_attachments(
-        max_messages=max_messages,
-        query=query,
-        label=label,
-    )
-
     imported_resumes: list[Resume] = []
     skipped_count = 0
     errors: list[str] = []
 
-    for attachment in attachments:
+    for attachment in gmail_resume_client.iter_recent_resume_attachments(
+        max_messages=max_messages,
+        query=query,
+        label=label,
+    ):
         candidate_name = _infer_candidate_name(attachment.sender, attachment.filename)
         try:
             text = extract_text_from_bytes(

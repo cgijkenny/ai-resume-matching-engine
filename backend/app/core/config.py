@@ -7,12 +7,15 @@ class Settings(BaseSettings):
     app_name: str = "One Stop Resume Engine"
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:5173"
+    enable_transformer_embeddings: bool = False
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     gmail_credentials_path: str = "credentials.json"
     gmail_token_path: str = "token.json"
     gmail_resume_label: str = ""
-    gmail_max_attachment_size_mb: int = 4
-    gmail_max_attachments_per_import: int = 30
+    gmail_max_attachment_size_mb: int = 2
+    gmail_max_attachments_per_import: int = 8
+    resume_max_text_characters: int = 25000
+    resume_pdf_max_pages: int = 12
     linkedin_client_id: str = ""
     linkedin_client_secret: str = ""
     linkedin_token_path: str = "linkedin_token.json"

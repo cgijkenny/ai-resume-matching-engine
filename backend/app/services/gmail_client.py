@@ -280,6 +280,20 @@ class GmailResumeClient:
         query: str | None = None,
         label: str | None = None,
     ) -> list[GmailAttachment]:
+        return list(
+            self.iter_recent_resume_attachments(
+                max_messages=max_messages,
+                query=query,
+                label=label,
+            )
+        )
+
+    def iter_recent_resume_attachments(
+        self,
+        max_messages: int = 20,
+        query: str | None = None,
+        label: str | None = None,
+    ):
         service = self._get_service()
         search_query = self._build_query(extra_query=query, label=label)
 
@@ -295,11 +309,11 @@ class GmailResumeClient:
         )
 
         messages = message_response.get("messages", [])
-        attachments: list[GmailAttachment] = []
+        yielded_attachments = 0
         max_total_attachments = max(1, settings.gmail_max_attachments_per_import)
 
         for message in messages:
-            if len(attachments) >= max_total_attachments:
+            if yielded_attachments >= max_total_attachments:
                 break
 
             message_id = message.get("id")
@@ -323,20 +337,17 @@ class GmailResumeClient:
                 payload=payload,
             )
             for item in payload_attachments:
-                if len(attachments) >= max_total_attachments:
+                if yielded_attachments >= max_total_attachments:
                     break
-                attachments.append(
-                    GmailAttachment(
-                        message_id=message_id,
-                        subject=subject,
-                        sender=sender,
-                        filename=item["filename"],
-                        mime_type=item["mime_type"],
-                        raw_bytes=item["raw_bytes"],
-                    )
+                yielded_attachments += 1
+                yield GmailAttachment(
+                    message_id=message_id,
+                    subject=subject,
+                    sender=sender,
+                    filename=item["filename"],
+                    mime_type=item["mime_type"],
+                    raw_bytes=item["raw_bytes"],
                 )
-
-        return attachments
 
     def _extract_supported_attachments(
         self,

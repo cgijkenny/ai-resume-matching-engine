@@ -4,6 +4,8 @@ import pdfplumber
 from docx import Document
 from fastapi import UploadFile
 
+from app.core.config import settings
+
 
 async def extract_text_from_upload(file: UploadFile) -> str:
     raw = await file.read()
@@ -42,21 +44,24 @@ def extract_text_from_bytes(
     normalized_text = text.strip()
     if not normalized_text:
         raise ValueError("No readable text found in uploaded file.")
-    return normalized_text
+    return normalized_text[: settings.resume_max_text_characters]
 
 
 def _extract_pdf_text(raw: bytes) -> str:
     buffer = BytesIO(raw)
     collected: list[str] = []
     with pdfplumber.open(buffer) as pdf:
-        for page in pdf.pages:
+        for page in pdf.pages[: settings.resume_pdf_max_pages]:
             page_text = page.extract_text() or ""
             if page_text.strip():
                 collected.append(page_text)
-    return "\n".join(collected)
+            current_size = sum(len(item) for item in collected)
+            if current_size >= settings.resume_max_text_characters:
+                break
+    return "\n".join(collected)[: settings.resume_max_text_characters]
 
 
 def _extract_docx_text(raw: bytes) -> str:
     document = Document(BytesIO(raw))
     lines = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
-    return "\n".join(lines)
+    return "\n".join(lines)[: settings.resume_max_text_characters]

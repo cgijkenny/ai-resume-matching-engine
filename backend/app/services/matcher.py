@@ -9,11 +9,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from app.core.config import settings
 from app.models import Job, Resume
 
-try:
-    from sentence_transformers import SentenceTransformer
-except Exception:  # pragma: no cover
-    SentenceTransformer = None
-
 
 @dataclass
 class MatchScore:
@@ -30,20 +25,24 @@ def _normalize_skill(value: str) -> str:
 class JobMatcher:
     def __init__(self) -> None:
         self._transformer = None
+        self._transformer_failed = False
         self._tfidf_vectorizer = TfidfVectorizer(stop_words="english")
 
     def _load_transformer(self):
         if self._transformer is not None:
             return self._transformer
-        if SentenceTransformer is None:
+        if self._transformer_failed or not settings.enable_transformer_embeddings:
             return None
         try:
+            from sentence_transformers import SentenceTransformer
+
             # Use local cache only to avoid long network retries at request time.
             self._transformer = SentenceTransformer(
                 settings.embedding_model_name,
                 local_files_only=True,
             )
         except Exception:  # pragma: no cover
+            self._transformer_failed = True
             self._transformer = None
         return self._transformer
 

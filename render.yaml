@@ -12,6 +12,8 @@ services:
         value: /api/v1
       - key: CORS_ORIGINS
         value: "*"
+      - key: ENABLE_TRANSFORMER_EMBEDDINGS
+        value: "false"
       - key: EMBEDDING_MODEL_NAME
         value: sentence-transformers/all-MiniLM-L6-v2
       - key: GMAIL_CREDENTIALS_PATH
@@ -22,6 +24,14 @@ services:
         value: /app/oauth/token.json
       - key: GMAIL_TOKEN_JSON
         value: ""
+      - key: GMAIL_MAX_ATTACHMENT_SIZE_MB
+        value: "2"
+      - key: GMAIL_MAX_ATTACHMENTS_PER_IMPORT
+        value: "5"
+      - key: RESUME_MAX_TEXT_CHARACTERS
+        value: "25000"
+      - key: RESUME_PDF_MAX_PAGES
+        value: "10"
       - key: LINKEDIN_CLIENT_ID
         value: ""
       - key: LINKEDIN_CLIENT_SECRET
